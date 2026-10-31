@@ -1977,6 +1977,205 @@ export function renderSubAreaFrame(params: SubAreaRenderParams): void {
   // Muros perimetrales, zócalos, vigas de madera, haces de luz y suelo de parquet/terracota
   drawSubAreaWallsAndFloor(ctx, area, wb, elapsed, reducedMotion);
 
+  // Taller Retro State TS · ambiente interior (forja, tablero de herramientas,
+  // planos, conducciones y desorden de trabajo) por debajo de los props y PNJ.
+  if (area.id === 'interior-taller-alcorn') {
+    ctx.save();
+
+    // Luz cálida de la forja derramada sobre muro y suelo.
+    const forgeGlow = ctx.createRadialGradient(380, 146, 6, 380, 146, 118);
+    forgeGlow.addColorStop(0, 'rgba(251, 146, 60, 0.17)');
+    forgeGlow.addColorStop(0.45, 'rgba(249, 115, 22, 0.08)');
+    forgeGlow.addColorStop(1, 'rgba(249, 115, 22, 0)');
+    ctx.fillStyle = forgeGlow;
+    ctx.fillRect(250, 96, 260, 230);
+
+    // Lámparas colgantes del techo con conos de luz tenues.
+    for (const lampX of [340, 470]) {
+      ctx.fillStyle = '#0b0f14';
+      ctx.fillRect(lampX - 1, 0, 2, 24);
+      ctx.fillStyle = '#1f2937';
+      ctx.fillRect(lampX - 11, 24, 22, 4);
+      ctx.fillStyle = '#0b0f14';
+      ctx.fillRect(lampX - 9, 28, 18, 4);
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(lampX - 7, 28, 14, 3);
+      ctx.fillStyle = '#fde68a';
+      ctx.fillRect(lampX - 5, 29, 10, 1);
+      const cone = ctx.createLinearGradient(lampX, 30, lampX, 148);
+      cone.addColorStop(0, 'rgba(253, 224, 139, 0.1)');
+      cone.addColorStop(1, 'rgba(253, 224, 139, 0)');
+      ctx.fillStyle = cone;
+      ctx.beginPath();
+      ctx.moveTo(lampX - 7, 30);
+      ctx.lineTo(lampX + 7, 30);
+      ctx.lineTo(lampX + 34, 150);
+      ctx.lineTo(lampX - 34, 150);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Tablero de herramientas (pegboard) sobre el banco TTL.
+    ctx.fillStyle = '#1a0e07';
+    ctx.fillRect(323, 45, 86, 36);
+    ctx.fillStyle = '#5c3a1e';
+    ctx.fillRect(325, 47, 82, 32);
+    ctx.fillStyle = '#3a2412';
+    for (let py = 50; py < 78; py += 4) {
+      for (let px = 328; px < 405; px += 5) {
+        ctx.fillRect(px, py, 1, 1);
+      }
+    }
+    // Herramientas colgadas: destornilladores, pinza y calibre.
+    const tools = [
+      { x: 333, col: '#f59e0b', len: 15 },
+      { x: 344, col: '#ef4444', len: 12 },
+      { x: 355, col: '#60a5fa', len: 16 },
+      { x: 369, col: '#cbd5e1', len: 13 },
+      { x: 388, col: '#94a3b8', len: 17 },
+    ];
+    for (const tool of tools) {
+      ctx.fillStyle = '#0b0f14';
+      ctx.fillRect(tool.x, 51, 2, tool.len);
+      ctx.fillStyle = tool.col;
+      ctx.fillRect(tool.x, 51, 1, tool.len - 3);
+      ctx.fillStyle = '#2b1a0d';
+      ctx.fillRect(tool.x - 1, 51, 4, 3);
+      ctx.fillStyle = '#0b0f14';
+      ctx.fillRect(tool.x - 1, 64 + (tool.x % 3), 4, 2);
+    }
+    ctx.fillStyle = '#8a5a2c';
+    ctx.fillRect(365, 72, 14, 2);
+    ctx.fillRect(371, 64, 2, 10);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(363, 63, 4, 3);
+
+    // Planos y notas clavados en la pared este.
+    ctx.fillStyle = '#0b111b';
+    ctx.fillRect(449, 49, 80, 35);
+    ctx.fillStyle = '#12324a';
+    ctx.fillRect(451, 51, 76, 31);
+    ctx.fillStyle = 'rgba(103, 232, 249, 0.65)';
+    ctx.fillRect(455, 55, 30, 1);
+    ctx.fillRect(455, 58, 44, 1);
+    ctx.fillRect(455, 61, 22, 1);
+    ctx.strokeStyle = 'rgba(103, 232, 249, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(492, 55, 26, 18);
+    ctx.strokeRect(498, 60, 12, 8);
+    ctx.fillStyle = 'rgba(253, 224, 139, 0.7)';
+    ctx.fillRect(520, 74, 5, 4);
+    ctx.fillStyle = '#fca5a5';
+    ctx.fillRect(455, 68, 8, 6);
+    ctx.fillStyle = '#fde68a';
+    ctx.fillRect(466, 70, 16, 1);
+    ctx.fillRect(466, 73, 11, 1);
+    // Chinchetas.
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(452, 51, 2, 2);
+    ctx.fillRect(526, 51, 2, 2);
+
+    // Estantería de frascos con componentes al oeste.
+    ctx.fillStyle = '#1a0e07';
+    ctx.fillRect(102, 52, 64, 30);
+    ctx.fillStyle = '#4a2b16';
+    ctx.fillRect(104, 54, 60, 26);
+    ctx.fillStyle = '#7a4b2a';
+    ctx.fillRect(104, 54, 60, 2);
+    ctx.fillRect(104, 66, 60, 2);
+    for (let j = 0; j < 6; j++) {
+      const jx = 107 + j * 9;
+      ctx.fillStyle = j % 2 === 0 ? '#0e2a2f' : '#2a2314';
+      ctx.fillRect(jx, 57, 6, 8);
+      ctx.fillStyle = j % 3 === 0 ? '#67e8f9' : j % 3 === 1 ? '#f59e0b' : '#a3e635';
+      ctx.fillRect(jx + 1, 58, 4, 6);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.fillRect(jx + 2, 59, 1, 4);
+      ctx.fillStyle = '#2a2314';
+      ctx.fillRect(jx, 68, 6, 6);
+      ctx.fillStyle = '#8a6a3a';
+      ctx.fillRect(jx + 1, 69, 4, 4);
+    }
+
+    // Tubería de cobre y caja de derivación en el muro oriental.
+    ctx.fillStyle = '#6b4423';
+    ctx.fillRect(592, 52, 58, 3);
+    ctx.fillRect(647, 52, 3, 32);
+    ctx.fillStyle = '#b8763a';
+    ctx.fillRect(592, 52, 58, 1);
+    ctx.fillRect(647, 52, 1, 32);
+    ctx.fillStyle = '#202a34';
+    ctx.fillRect(588, 48, 8, 10);
+    ctx.fillRect(590, 78, 12, 3);
+    ctx.fillStyle = Math.sin(elapsed * 2.2) > 0 ? '#4ade80' : '#14532d';
+    ctx.fillRect(591, 51, 2, 2);
+    ctx.fillStyle = '#0b0f14';
+    ctx.fillRect(645, 82, 7, 2);
+
+    // Manchas de aceite y virutas en el suelo.
+    for (const [ox, oy, orad] of [
+      [316, 238, 13],
+      [505, 332, 10],
+      [432, 214, 8],
+    ] as const) {
+      const stain = ctx.createRadialGradient(ox, oy, 1, ox, oy, orad);
+      stain.addColorStop(0, 'rgba(8, 12, 10, 0.32)');
+      stain.addColorStop(1, 'rgba(8, 12, 10, 0)');
+      ctx.fillStyle = stain;
+      ctx.fillRect(ox - orad, oy - orad, orad * 2, orad * 2);
+      ctx.fillStyle = 'rgba(20, 26, 20, 0.4)';
+      ctx.fillRect(ox - 5, oy + 1, 8, 2);
+      ctx.fillRect(ox + 1, oy - 3, 4, 1);
+    }
+    // Carrete de cable junto al banco, con cable suelto.
+    ctx.fillStyle = '#3b2412';
+    ctx.beginPath();
+    ctx.arc(500, 254, 11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#8a5a2c';
+    ctx.beginPath();
+    ctx.arc(500, 254, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#2a1a0e';
+    ctx.beginPath();
+    ctx.arc(500, 254, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#b8763a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(509, 258);
+    ctx.quadraticCurveTo(524, 268, 516, 282);
+    ctx.quadraticCurveTo(508, 292, 522, 298);
+    ctx.stroke();
+    // Caja de herramientas y piezas sueltas.
+    ctx.fillStyle = '#0b0f14';
+    ctx.fillRect(492, 396, 24, 14);
+    ctx.fillStyle = '#7f1d1d';
+    ctx.fillRect(493, 397, 22, 12);
+    ctx.fillStyle = '#b91c1c';
+    ctx.fillRect(493, 397, 22, 2);
+    ctx.fillStyle = '#1f2937';
+    ctx.fillRect(499, 393, 10, 4);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(500, 399, 8, 2);
+    for (let bit = 0; bit < 8; bit++) {
+      const th = (bit * 37 + 11) % 100;
+      ctx.fillStyle = bit % 3 === 0 ? '#f59e0b' : bit % 3 === 1 ? '#67e8f9' : '#94a3b8';
+      ctx.fillRect(330 + (th % 46), 206 + (th % 28), 2, 1);
+    }
+    // Umbral metálico de la puerta sur.
+    ctx.fillStyle = '#1f2937';
+    ctx.fillRect(358, 444, 44, 6);
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(358, 444, 44, 1);
+    ctx.fillStyle = '#0b0f14';
+    for (let bx2 = 362; bx2 < 400; bx2 += 7) {
+      ctx.fillRect(bx2, 446, 1, 4);
+    }
+
+    ctx.restore();
+  }
+
   // Muro Falso en el Taller Analógico (grieta sutil o puerta secreta abierta)
   if (area.id === 'interior-taller-alcorn') {
     const wallOpened =

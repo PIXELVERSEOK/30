@@ -35,6 +35,7 @@ import { GlitchTrailStage } from './stages/GlitchTrailStage';
 import { Pong1972Stage } from './stages/Pong1972Stage';
 import { NightDriver1976Stage } from './stages/NightDriver1976Stage';
 import { Galaxian1979Stage } from './stages/Galaxian1979Stage';
+import { CircuitoAnfibio1979Stage } from './stages/CircuitoAnfibio1979Stage';
 import { IslaNatalStage } from './stages/IslaNatalStage';
 import { Origin70sIsland, Island70sArrivalMode } from './island/Origin70sIsland';
 import { ISLA_NATAL_FLAGS } from './island/islaNatalData';
@@ -61,6 +62,7 @@ import {
   discoverRpgSecret,
   grantPongBoardAbility,
   grantInventoryItems,
+  consumeInventoryItems,
   loadProgressState,
   markCeremonyCompleted,
   markGameStarted,
@@ -113,7 +115,8 @@ type ViewStateId =
   | 'state-invaders'
   | 'state-dk-classic'
   | 'state-night-driver'
-  | 'state-galaxian';
+  | 'state-galaxian'
+  | 'state-frogger';
 
 const MASTER_SERIAL = 'zudoka26';
 const SECRET_KEY_SEQUENCE = ['w', 's', 'a', 'd', 'w', 's', 'a', 'd', 'w', 's', 'd', 'a'];
@@ -215,6 +218,12 @@ const UNLOCKABLE_LEVELS: {
     title: 'Galaxian (1979)',
     subtitle: 'Enjambre Espacial RGB · Meta 500 PTS',
   },
+  {
+    id: 'state-frogger',
+    code: 'CRC-79',
+    title: 'Cruce de Circuitos (1979) · Prototipo',
+    subtitle: 'Bosque de las Señales · 3 pads · Pieza del Generador',
+  },
 ];
 
 
@@ -241,6 +250,7 @@ class GameManager {
     'state-dk-classic',
     'state-night-driver',
     'state-galaxian',
+    'state-frogger',
   ];
   private listener?: (state: ViewStateId) => void;
   private swapTimer: number | null = null;
@@ -550,6 +560,8 @@ export default function App() {
 
   const [islandArrivalMode, setIslandArrivalMode] =
     useState<IslandArrivalMode>('awakening');
+  // Aviso de llegada al muelle norte de Isla Natal tras volver de Isla Origen.
+  const [natalArrivalFromOrigen, setNatalArrivalFromOrigen] = useState<boolean>(false);
   const [achievementToast, setAchievementToast] = useState<string | null>(null);
 
   // Panel de Configuración (Sonido y Guardado de Partida)
@@ -1045,8 +1057,20 @@ export default function App() {
     managerRef.current?.transitionTo('state-archipelago');
   }, []);
 
+  const handleTravelOrigenToNatal = useCallback(() => {
+    // Regreso por mar al puerto norte de Isla Natal. La posición de Origen ya
+    // quedó guardada por la escena y todo el inventario/banderas se conserva.
+    setIslandArrivalMode('standard');
+    setNatalArrivalFromOrigen(true);
+    managerRef.current?.transitionTo('state-isla-natal');
+  }, []);
+
   const handleGrantIslaNatalItems = useCallback((itemIds: string[]) => {
     setProgressState((prev) => grantInventoryItems(prev, itemIds));
+  }, []);
+
+  const handleConsumeIslaNatalItems = useCallback((itemIds: string[]) => {
+    setProgressState((prev) => consumeInventoryItems(prev, itemIds));
   }, []);
 
   const handleOpenMenuOptions = useCallback(() => {
@@ -1732,7 +1756,10 @@ export default function App() {
               narrativeEvents={progressState.island70s.narrativeEvents}
               onRecordNarrativeEvent={handleRecordIslaNatalEvent}
               onDepartToOrigin={handleDepartIslaNatal}
+              arrivedFromOrigen={natalArrivalFromOrigen}
+              onArrivalNoticeShown={() => setNatalArrivalFromOrigen(false)}
               onGrantInventoryItems={handleGrantIslaNatalItems}
+              onConsumeInventoryItems={handleConsumeIslaNatalItems}
             />
           </SceneGuard>
         )}
@@ -1823,6 +1850,14 @@ export default function App() {
             onEnterGalaxian={() => {
               managerRef.current?.transitionTo('state-galaxian');
             }}
+            onEnterFrogger={() => {
+              managerRef.current?.transitionTo('state-frogger');
+            }}
+            onRecordNarrativeEvent={(eventId) => {
+              setProgressState((prev) => recordNarrativeEvent(prev, eventId));
+            }}
+            onGrantInventoryItems={handleGrantIslaNatalItems}
+            onConsumeInventoryItems={handleConsumeIslaNatalItems}
             onSetRpgFlag={(key, val) => {
               setProgressState((prev) => setRpgFlag(prev, key, val));
             }}
@@ -1907,6 +1942,7 @@ export default function App() {
             onArrivalSequenceFinished={() => {
               setIslandArrivalMode('standard');
             }}
+            onTravelToNatal={handleTravelOrigenToNatal}
             isGbGreenMode={isGbGreenMode}
             onToggleGbGreenMode={() => {
               setIsGbGreenMode((prev) => !prev);
@@ -2245,6 +2281,37 @@ export default function App() {
             bestSavedScore={progressState.games['galaxian']?.bestScore ?? 0}
             onMemoryRestored={(finalScore: number) => {
               setProgressState((prev) => recordGameVictory(prev, 'galaxian', finalScore, 2));
+              window.dispatchEvent(new CustomEvent('pixelverse-shake'));
+            }}
+            onReturnToRoom={() => {
+              setIslandArrivalMode('standard');
+              managerRef.current?.transitionTo('state-archipelago');
+            }}
+          />
+        )}
+      </section>
+
+      {/* =========================================================
+          ESTADO CRUCE DE CIRCUITOS (1979) — PROTOTIPO DEL BOSQUE
+         ========================================================= */}
+      <section id="state-frogger" className="view-state z-10 px-4 py-4 arcade-hall-backdrop">
+        {windowReady && activeState === 'state-frogger' && (
+          <CircuitoAnfibio1979Stage
+            alreadyRestored={Boolean(progressState.games['frogger']?.memoryUnlocked)}
+            bestSavedScore={progressState.games['frogger']?.bestScore ?? 0}
+            onVictory={(finalScore: number) => {
+              setProgressState((prev) => {
+                const next = recordGameVictory(prev, 'frogger', finalScore);
+                // La pieza del generador sólo se imprime si Kertz encargó esa
+                // misión. En la nueva trama el gabinete es la prueba de Dylan.
+                const generatorQuestActive =
+                  prev.rpg.questStates['quest-generador-retrostate'] === 'active';
+                if (!generatorQuestActive) return next;
+                const alreadyHasPart = next.rpg.inventoryItems.includes('item-pieza-generador');
+                const partOpened = next.rpg.openedChestIds.includes('origen-frogger-part');
+                if (alreadyHasPart || partOpened) return next;
+                return openRpgChest(next, 'origen-frogger-part', ['item-pieza-generador']);
+              });
               window.dispatchEvent(new CustomEvent('pixelverse-shake'));
             }}
             onReturnToRoom={() => {

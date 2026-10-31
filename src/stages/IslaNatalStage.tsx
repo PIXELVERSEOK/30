@@ -21,11 +21,14 @@ import { isActionPressed, loadKeybindings, type KeybindingsMap } from '../contro
 import {
   ARCADE_DIALOG_AFTER_WIN,
   ARCADE_DIALOG_DUSTY,
+  ARCADE_DIALOG_LEVER_READY,
+  ARCADE_DIALOG_MISSING_LEVER,
   ARCADE_DIALOG_POWER_ON,
   ARCADE_DIALOG_SPENT,
   DEPARTURE_BLOCKED_DIALOG,
   ISLA_NATAL_ARCADE_ANCHOR,
   ISLA_NATAL_CABIN,
+  ISLA_NATAL_CHEST_CODE,
   ISLA_NATAL_DEPARTURE,
   ISLA_NATAL_FLAGS,
   ISLA_NATAL_NORTH_PORT_SPAWN,
@@ -37,6 +40,9 @@ import {
   ISLA_NATAL_WORLD_H,
   ISLA_NATAL_WORLD_W,
   ISLA_NATAL_ZONES,
+  NATAL_CHEST_EMPTY_DIALOG,
+  NATAL_CHEST_LOCKED_DIALOG,
+  NATAL_CHEST_REVEAL_DIALOG,
   NATAL_STORM_QUESTION_DIALOG,
   NATAL_TRAVELER_DIALOG,
   PADDLE_DIALOG,
@@ -97,8 +103,9 @@ const CABIN_INTRO_DIALOG: IslaNatalDialog = {
     'La puerta se cierra a tu espalda y el ruido del mar queda afuera. Adentro huele a leña, a pan de ayer y a la lámpara de aceite que nadie apagó.',
     'La cama está hecha, la mesa puesta para dos y la cocina todavía tibia. Nada ha cambiado desde la última vez que jugaste aquí.',
     'Junto a la ventana, colgada de un clavo, sigue tu vieja mochila de lona.',
+    'Bajo el retrato familiar descansa el cofre del abuelo, cerrado con cuatro discos de latón. Nunca te dejó abrirlo.',
   ],
-  hint: 'Acércate a la mochila y pulsa [E] para llevártela. La puerta de abajo te devuelve a la pradera.',
+  hint: 'Acércate a la mochila y pulsa [E] para llevártela. El cofre espera bajo el retrato.',
 };
 
 const CABIN_BACKPACK_DIALOG: IslaNatalDialog = {
@@ -114,7 +121,15 @@ const CABIN_BACKPACK_DIALOG: IslaNatalDialog = {
 
 const NATAL_FLAGS = ISLA_NATAL_FLAGS;
 
-type NatalPromptKind = 'poi' | 'arcade' | 'paddle' | 'departure' | 'cabin-exit' | 'cabin-backpack';
+type NatalPromptKind =
+  | 'poi'
+  | 'arcade'
+  | 'paddle'
+  | 'departure'
+  | 'cabin-exit'
+  | 'cabin-backpack'
+  | 'cabin-radio'
+  | 'cabin-chest';
 
 /**
  * Fases de la escena del viajero: la tormenta ocurre con Pixel dentro de la
@@ -189,8 +204,13 @@ export interface IslaNatalStageProps {
   narrativeEvents: string[];
   onRecordNarrativeEvent: (eventId: string) => void;
   onDepartToOrigin: () => void;
+  /** Llegada desde Isla Origen: aparecer en el puerto norte con un aviso. */
+  arrivedFromOrigen?: boolean;
+  onArrivalNoticeShown?: () => void;
   /** Entrega el equipo inicial de la mochila al inventario persistente. */
   onGrantInventoryItems: (itemIds: string[]) => void;
+  /** Retira objetos consumidos en el mundo, como la palanca del gabinete. */
+  onConsumeInventoryItems: (itemIds: string[]) => void;
 }
 
 export function IslaNatalStage({
@@ -201,7 +221,10 @@ export function IslaNatalStage({
   narrativeEvents,
   onRecordNarrativeEvent,
   onDepartToOrigin,
+  arrivedFromOrigen = false,
+  onArrivalNoticeShown,
   onGrantInventoryItems,
+  onConsumeInventoryItems,
 }: IslaNatalStageProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [keybindings] = useState<KeybindingsMap>(() => loadKeybindings());
@@ -234,6 +257,12 @@ export function IslaNatalStage({
       : 'dusty';
   const paddleOnGround = pongWon && !paddleCarried;
   const hasBackpack = flagSet.has(NATAL_FLAGS.backpack);
+  // El cofre solo se abre con la combinación que entrega el viajero. Las
+  // partidas anteriores a esta secuencia conservan su progreso: si Pong ya
+  // estaba encendido, la palanca se da por instalada.
+  const chestOpened = flagSet.has(NATAL_FLAGS.chestOpened) || pongWon;
+  const chestCodeKnown = flagSet.has(NATAL_FLAGS.travelerWarning);
+  const leverInstalled = flagSet.has(NATAL_FLAGS.leverInstalled) || arcadePowered;
   // El puerto norte sólo abre el carril de surf cuando Pong está ganado, la
   // Barra de Pong está en manos del jugador y la mochila ha sido recogida.
   const departureReady = pongWon && paddleCarried && hasBackpack;
@@ -253,6 +282,9 @@ export function IslaNatalStage({
   /* -------------------------------------------------------------- */
 
   const [dialogModal, setDialogModal] = useState<NatalDialogModal | null>(null);
+  const [chestCodeOpen, setChestCodeOpen] = useState(false);
+  const [chestCode, setChestCode] = useState('');
+  const [chestCodeError, setChestCodeError] = useState(false);
   const [dialogueVisibleChars, setDialogueVisibleChars] = useState(0);
   const [dialogueLineIndex, setDialogueLineIndex] = useState(0);
   const dialogueLines = dialogModal?.dialog.lines ?? null;
@@ -335,6 +367,20 @@ export function IslaNatalStage({
     },
     []
   );
+
+  // Aviso único al desembarcar de vuelta desde Isla Origen: el jugador
+  // aparece en el puerto norte con todo su inventario y sus banderas.
+  const arrivalNoticeShownRef = useRef(false);
+  const arrivalNoticeCallbackRef = useRef(onArrivalNoticeShown);
+  arrivalNoticeCallbackRef.current = onArrivalNoticeShown;
+  useEffect(() => {
+    if (!arrivedFromOrigen || arrivalNoticeShownRef.current) return;
+    arrivalNoticeShownRef.current = true;
+    showToast(
+      'Regreso a Isla Natal · Muelle Norte. La Barra de Pong quedó lista para volver a Isla Origen.'
+    );
+    arrivalNoticeCallbackRef.current?.();
+  }, [arrivedFromOrigen, showToast]);
 
   /* -------------------------------------------------------------- */
   /* RETO DE PONG Y PARTIDA                                          */
@@ -424,17 +470,23 @@ export function IslaNatalStage({
   });
   const grantInventoryRef = useRef(onGrantInventoryItems);
   grantInventoryRef.current = onGrantInventoryItems;
+  const consumeInventoryRef = useRef(onConsumeInventoryItems);
+  consumeInventoryRef.current = onConsumeInventoryItems;
 
   const stageRef = useRef({
     flagSet,
     arcadeState,
     paddleOnGround,
     departureReady,
+    chestOpened,
+    chestCodeKnown,
+    leverInstalled,
     skinColor,
     hairColor,
     shirtColor,
     appearance,
     dialogOpen: false,
+    codeOpen: false,
     challengeOpen,
     vistaOpen,
     showZoneBanner,
@@ -447,11 +499,15 @@ export function IslaNatalStage({
     arcadeState,
     paddleOnGround,
     departureReady,
+    chestOpened,
+    chestCodeKnown,
+    leverInstalled,
     skinColor,
     hairColor,
     shirtColor,
     appearance,
     dialogOpen: dialogModal !== null,
+    codeOpen: chestCodeOpen,
     challengeOpen,
     vistaOpen,
     showZoneBanner,
@@ -495,19 +551,47 @@ export function IslaNatalStage({
     });
   }, [markFlag, openChallenge]);
 
+  const installLever = useCallback(() => {
+    markFlag(NATAL_FLAGS.leverInstalled);
+    // La palanca deja el inventario: queda montada en el gabinete, no se duplica.
+    consumeInventoryRef.current(['item-palanca-pong']);
+    // Instalar la palanca es el gesto que devuelve la corriente al gabinete.
+    powerOnArcade();
+  }, [markFlag, powerOnArcade]);
+
   const interactArcade = useCallback(() => {
     const flags = stageRef.current.flagSet;
     if (!flags.has(NATAL_FLAGS.arcadePowered)) {
       if (!flags.has(NATAL_FLAGS.arcadeFound)) {
         markFlag(NATAL_FLAGS.arcadeFound);
         retroAudio.echoDiscover();
+        setDialogModal({
+          category: 'LA ARBOLEDA · UN REGALO IMPOSIBLE',
+          tone: 'arcane',
+          dialog: ARCADE_DIALOG_DUSTY,
+        });
+        return;
       }
-      setDialogModal({
-        category: 'LA ARBOLEDA · UN REGALO IMPOSIBLE',
-        tone: 'arcane',
-        dialog: ARCADE_DIALOG_DUSTY,
-        primary: { label: 'Encender el gabinete', run: powerOnArcade },
-      });
+      // Sin la palanca del cofre la máquina no responde: primero hay que
+      // volver a la cabaña, abrir el cofre y traer el mecanismo.
+      if (!flags.has(NATAL_FLAGS.chestOpened) && !flags.has(NATAL_FLAGS.pongWon)) {
+        setDialogModal({
+          category: 'LA ARBOLEDA · LA RANURA VACÍA',
+          tone: 'arcane',
+          dialog: ARCADE_DIALOG_MISSING_LEVER,
+        });
+        return;
+      }
+      if (!flags.has(NATAL_FLAGS.leverInstalled)) {
+        setDialogModal({
+          category: 'LA ARBOLEDA · LA PALANCA DEL ABUELO',
+          tone: 'arcane',
+          dialog: ARCADE_DIALOG_LEVER_READY,
+          primary: { label: 'Instalar la palanca', run: installLever },
+        });
+        return;
+      }
+      powerOnArcade();
       return;
     }
     if (!flags.has(NATAL_FLAGS.pongWon)) {
@@ -525,7 +609,7 @@ export function IslaNatalStage({
       tone: 'arcane',
       dialog: carried ? ARCADE_DIALOG_SPENT : ARCADE_DIALOG_AFTER_WIN,
     });
-  }, [markFlag, openChallenge, powerOnArcade]);
+  }, [installLever, markFlag, openChallenge, powerOnArcade]);
 
   const interactPaddle = useCallback(() => {
     setDialogModal({
@@ -738,6 +822,134 @@ export function IslaNatalStage({
     });
   }, [markFlag, showToast]);
 
+  const interactRadio = useCallback(() => {
+    const flags = stageRef.current.flagSet;
+    if (flags.has(NATAL_FLAGS.valveDelivered)) {
+      setDialogModal({
+        category: 'PRADERA DE CASA · LA RADIO DEL ABUELO',
+        tone: 'wood',
+        dialog: {
+          title: 'La radio de la mesa',
+          paragraphs: [
+            'El dial sigue en la frecuencia de siempre, templando entre dos emisoras que ya no existen.',
+            'El compartimento de latón está vacío: la válvula de 1969 viaja en tu mochila, rumbo a la compuerta del acantilado.',
+          ],
+        },
+      });
+      return;
+    }
+    if (!flags.has(NATAL_FLAGS.valvePending)) {
+      setDialogModal({
+        category: 'PRADERA DE CASA · LA RADIO DEL ABUELO',
+        tone: 'wood',
+        dialog: {
+          title: 'La radio de la mesa',
+          paragraphs: [
+            'La radio del abuelo sigue encendida, templando el dial entre dos emisoras que ya no existen.',
+            'Bajo el mueble hay un compartimento de latón cerrado con un tornillo. Nada indica que haga falta abrirlo todavía.',
+          ],
+          hint: 'El abuelo hablaba de esta radio como si guardara algo más que música.',
+        },
+      });
+      return;
+    }
+    setDialogModal({
+      category: 'PRADERA DE CASA · LA RADIO DEL ABUELO',
+      tone: 'wood',
+      dialog: {
+        title: 'El compartimento de latón',
+        paragraphs: [
+          'La radio del abuelo sigue tibia. Al inclinarla, el compartimento de latón del dial se abre con un chasquido: adentro hay una válvula de vacío envuelta en papel encerado, marcada a lápiz con el año 1969.',
+          'En el papel, la letra del abuelo: «Para cuando la señal se caiga. No la fuerces: la rosca es de la vieja».',
+        ],
+        hint: 'La compuerta PRIORIDAD CERO de la Costa de las Máquinas espera esta válvula.',
+      },
+      primary: {
+        label: 'Guardar la válvula',
+        run: () => {
+          markFlag(NATAL_FLAGS.valveDelivered);
+          grantInventoryRef.current(['item-valvula-vacio-abuelo']);
+          emitParticles(
+            particlesRef.current,
+            ISLA_NATAL_CABIN.radio.x,
+            ISLA_NATAL_CABIN.radio.y,
+            44,
+            '#7dd3fc',
+            54,
+            22
+          );
+          retroAudio.achievementUnlock();
+          setDialogModal(null);
+          showToast(
+            'Válvula de Vacío del Abuelo (1969) guardada · Volvé a Isla Origen para instalarla.'
+          );
+        },
+      },
+    });
+  }, [markFlag, showToast]);
+
+  const interactChest = useCallback(() => {
+    const flags = stageRef.current.flagSet;
+    if (flags.has(NATAL_FLAGS.chestOpened) || flags.has(NATAL_FLAGS.pongWon)) {
+      setDialogModal({
+        category: 'PRADERA DE CASA · EL COFRE DEL ABUELO',
+        tone: 'wood',
+        dialog: NATAL_CHEST_EMPTY_DIALOG,
+      });
+      return;
+    }
+    // La combinación solo se conoce después de la visita del viajero.
+    if (!flags.has(NATAL_FLAGS.travelerWarning)) {
+      setDialogModal({
+        category: 'PRADERA DE CASA · CERRADURA DE LATÓN',
+        tone: 'wood',
+        dialog: NATAL_CHEST_LOCKED_DIALOG,
+      });
+      return;
+    }
+    setDialogModal(null);
+    setChestCode('');
+    setChestCodeError(false);
+    setChestCodeOpen(true);
+    retroAudio.uiClick();
+  }, []);
+
+  const closeChestCode = useCallback(() => {
+    setChestCodeOpen(false);
+    setChestCode('');
+    setChestCodeError(false);
+    retroAudio.uiClick();
+  }, []);
+
+  const submitChestCode = useCallback(() => {
+    if (chestCode.trim() !== ISLA_NATAL_CHEST_CODE) {
+      setChestCodeError(true);
+      retroAudio.npcBlip(0.62);
+      return;
+    }
+    setChestCodeOpen(false);
+    setChestCode('');
+    setChestCodeError(false);
+    markFlag(NATAL_FLAGS.chestOpened);
+    grantInventoryRef.current(['item-palanca-pong', 'item-carta-abuelo', 'item-foto-abuelo']);
+    emitParticles(
+      particlesRef.current,
+      ISLA_NATAL_CABIN.chest.x,
+      ISLA_NATAL_CABIN.chest.y - 8,
+      64,
+      '#ffe7a8',
+      86,
+      42
+    );
+    retroAudio.achievementUnlock();
+    setDialogModal({
+      category: 'PRADERA DE CASA · EL COFRE DEL ABUELO',
+      tone: 'wood',
+      dialog: NATAL_CHEST_REVEAL_DIALOG,
+      primary: { label: 'Guardar la carta', run: () => setDialogModal(null) },
+    });
+  }, [chestCode, markFlag]);
+
   const openVista = useCallback(() => {
     // El jugador se detiene frente al catalejo antes de abrir la vista lejana.
     clickResetRef.current();
@@ -785,14 +997,18 @@ export function IslaNatalStage({
       else if (target.kind === 'arcade') interactArcade();
       else if (target.kind === 'paddle') interactPaddle();
       else if (target.kind === 'cabin-backpack') takeCabinBackpack();
+      else if (target.kind === 'cabin-radio') interactRadio();
+      else if (target.kind === 'cabin-chest') interactChest();
       else if (target.kind === 'cabin-exit') leaveCabin();
       else interactDeparture();
     },
     [
       interactArcade,
+      interactChest,
       interactDeparture,
       interactPaddle,
       interactPoi,
+      interactRadio,
       leaveCabin,
       takeCabinBackpack,
     ]
@@ -1151,6 +1367,8 @@ export function IslaNatalStage({
       }
 
       if (stage.challengeOpen || departureRef.current) return;
+      // El teclado de la cerradura se lleva desde su propio campo numérico.
+      if (stage.codeOpen) return;
       if (
         travelerPhaseRef.current === 'radio' ||
         travelerPhaseRef.current === 'storm' ||
@@ -1219,6 +1437,7 @@ export function IslaNatalStage({
         stageRef.current.dialogOpen ||
         stageRef.current.challengeOpen ||
         stageRef.current.vistaOpen ||
+        stageRef.current.codeOpen ||
         travelerPhaseRef.current !== 'none'
       ) {
         return;
@@ -1281,6 +1500,7 @@ export function IslaNatalStage({
         stage.dialogOpen ||
         stage.challengeOpen ||
         stage.vistaOpen ||
+        stage.codeOpen ||
         travelerPhaseRef.current !== 'none';
       const departure = departureRef.current;
 
@@ -1611,6 +1831,39 @@ export function IslaNatalStage({
               ISLA_NATAL_CABIN.backpack.radius
             );
           }
+          // La radio del abuelo esconde la válvula del Faro sólo cuando la
+          // trama ya reveló que falta un componente antiguo.
+          if (
+            stage.flagSet.has(NATAL_FLAGS.valvePending) &&
+            !stage.flagSet.has(NATAL_FLAGS.valveDelivered)
+          ) {
+            consider(
+              {
+                kind: 'cabin-radio',
+                id: 'cabin-radio',
+                label: 'Revisar la radio del abuelo',
+                accentHex: '#7dd3fc',
+                x: ISLA_NATAL_CABIN.radio.x,
+                y: ISLA_NATAL_CABIN.radio.y,
+              },
+              ISLA_NATAL_CABIN.radio.radius
+            );
+          }
+          consider(
+            {
+              kind: 'cabin-chest',
+              id: 'cabin-chest',
+              label: stage.chestOpened
+                ? 'Revisar el cofre'
+                : stage.chestCodeKnown
+                  ? 'Abrir el cofre'
+                  : 'Examinar el cofre',
+              accentHex: '#facc15',
+              x: ISLA_NATAL_CABIN.chest.x,
+              y: ISLA_NATAL_CABIN.chest.y,
+            },
+            ISLA_NATAL_CABIN.chest.radius
+          );
         } else {
           for (const poi of ISLA_NATAL_POIS) {
             consider(
@@ -1681,6 +1934,7 @@ export function IslaNatalStage({
             appearance: stage.appearance,
             prompt: promptSpec,
             backpackOnHook: !stage.flagSet.has(NATAL_FLAGS.backpack),
+            chestOpened: stage.chestOpened,
             radioOn: travelerPhaseRef.current === 'radio',
             storm: stormNow,
           });
@@ -1910,6 +2164,99 @@ export function IslaNatalStage({
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Cerradura del cofre: la combinación que entregó el viajero */}
+      {chestCodeOpen && (
+        <div className="dialogue-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitChestCode();
+            }}
+            className="dialogue-frame dialogue-wood rounded-none w-full max-w-md p-4 sm:p-6 space-y-4 relative"
+          >
+            <div className="flex items-start justify-between gap-3 border-b-2 border-dashed border-white/30 pb-2.5">
+              <div>
+                <p className="dialogue-kicker text-[10px] font-mono tracking-widest uppercase">
+                  Pradera de Casa · Cerradura de latón
+                </p>
+                <h3 className="dialogue-speaker font-mono text-base sm:text-lg font-bold mt-0.5">
+                  El cofre del abuelo
+                </h3>
+                <p className="text-[11px] font-mono text-[#7dd3fc] mt-1">
+                  Cuatro discos numerados
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeChestCode}
+                aria-label="Cerrar la cerradura"
+                className="text-white hover:text-amber-300 cursor-pointer p-1 font-mono font-bold"
+              >
+                [X]
+              </button>
+            </div>
+
+            <p className="text-xs sm:text-sm font-mono leading-relaxed text-amber-100/90">
+              Los discos giran con un chasquido seco. La carta del abuelo guarda la combinación;
+              escríbela tal como él la dejó.
+            </p>
+
+            <label className="block">
+              <span className="block text-[10px] font-mono tracking-[0.3em] text-amber-200/80 mb-1.5">
+                COMBINACIÓN
+              </span>
+              <input
+                autoFocus
+                value={chestCode}
+                onChange={(event) => {
+                  setChestCode(event.target.value.replace(/\D/g, '').slice(0, 4));
+                  setChestCodeError(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeChestCode();
+                  }
+                }}
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                aria-label="Combinación del cofre"
+                placeholder="····"
+                className="w-full bg-black/35 border-2 border-amber-300/40 px-3 py-3 text-center font-mono text-3xl tracking-[0.45em] text-amber-100 outline-none focus:border-amber-200"
+                style={{ caretColor: '#fde68a' }}
+              />
+            </label>
+
+            {chestCodeError && (
+              <p role="alert" className="text-[11px] font-mono text-red-300">
+                La cerradura no cede. Esa no es la combinación.
+              </p>
+            )}
+
+            <div className="flex flex-wrap justify-end items-center gap-2 pt-1">
+              <span className="mr-auto font-mono text-[10px] text-slate-400 tracking-widest">
+                [ENTER] ABRIR · [ESC] SALIR
+              </span>
+              <button
+                type="button"
+                onClick={closeChestCode}
+                className="px-3 py-1.5 font-mono text-xs uppercase tracking-wider text-slate-300 hover:text-white cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={chestCode.length < 4}
+                className="dialogue-action px-4 py-1.5 font-mono font-bold text-xs uppercase tracking-wider cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Abrir cofre
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

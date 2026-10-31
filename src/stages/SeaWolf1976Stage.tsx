@@ -5,7 +5,7 @@
  * SEA WOLF (1976 · Midway / Dave Nutting) — HITO JUGABLE NAVAL DE PIXELVERSE
  * Recrea la vista por periscopio, disparos de torpedos con recarga, convoyes de barcos
  * de superficie (PT boats, destructores, cargueros) y esquive de minas flotantes.
- * Superar los 400 PTS desbloquea el PULSO SONAR para la isla.
+ * Superar los 400 PTS restaura la memoria histórica de Sea Wolf para la isla.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -501,7 +501,7 @@ export function SeaWolf1976Stage({
               FIN DE LA MISIÓN PERISCOPIO
             </h3>
             <p className="text-sm text-slate-300 mb-4 max-w-sm">
-              Has alcanzado <span className="text-[#10b981] font-bold">{score} PUNTOS</span>. Se requieren 400 PTS para desbloquear el <span className="text-[#00f3ff] font-bold">PULSO SONAR</span>.
+              Has alcanzado <span className="text-[#10b981] font-bold">{score} PUNTOS</span>. Se requieren 400 PTS para restaurar la <span className="text-[#00f3ff] font-bold">MEMORIA DE SEA WOLF</span>.
             </p>
             <button
               type="button"
@@ -517,10 +517,10 @@ export function SeaWolf1976Stage({
         {gameWon && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 glass-panel border border-[#10b981] px-4 py-2 rounded-lg text-center z-20 animate-bounce">
             <div className="text-xs font-bold text-[#10b981] flex items-center justify-center gap-1">
-              <Waves className="w-4 h-4 text-[#38bdf8]" /> ¡PODER DESBLOQUEADO: PULSO SONAR!
+              <Waves className="w-4 h-4 text-[#38bdf8]" /> ¡MEMORIA RESTAURADA: SEA WOLF (1976)!
             </div>
             <div className="text-[10px] text-slate-300">
-              Revela secretos y mecanismos ocultos en la isla con [1-4] + [F/Acción].
+              La frecuencia naval vuelve a latir en la isla.
             </div>
           </div>
         )}

@@ -155,13 +155,27 @@ export const ISLA_NATAL_CABIN = {
   introSpot: { x: 300, y: 214 },
   door: { x: 240, y: 282, radius: 46 },
   backpack: { x: 200, y: 104, radius: 50 },
+  /**
+   * El cofre del abuelo descansa bajo el retrato familiar. Guarda la palanca
+   * del viejo Pong y la carta que explica el Reinicio Cero.
+   */
+  chest: { x: 282, y: 172, radius: 50 },
+  /**
+   * Radio de la mesa. El compartimento de latón bajo el dial guarda la
+   * válvula de vacío de repuesto que el abuelo mencionaba en sus cartas.
+   */
+  radio: { x: 363, y: 163, radius: 54 },
   /** Muebles que bloquean el paso dentro de la sala. */
   solids: [
     { id: 'cama', x: 30, y: 150, w: 112, h: 114 },
     { id: 'mesa', x: 318, y: 148, w: 86, h: 58 },
     { id: 'cocina', x: 404, y: 112, w: 64, h: 92 },
+    { id: 'cofre', x: 270, y: 162, w: 24, h: 16 },
   ] as IslaNatalSolidRect[],
 };
+
+/** Combinación grabada en la carta que el viajero entrega en mano. */
+export const ISLA_NATAL_CHEST_CODE = '1972';
 
 export function isCabinInteriorWalkable(x: number, y: number): boolean {
   if (x < 26 || x > 454 || y < 138 || y > 286) return false;
@@ -275,6 +289,10 @@ export const ISLA_NATAL_FLAGS = {
   cabinVisited: 'isla-natal-cabana-vista',
   backpack: 'isla-natal-mochila',
   travelerWarning: 'isla-natal-aviso-viajero',
+  chestOpened: 'isla-natal-cofre-abierto',
+  leverInstalled: 'isla-natal-palanca-instalada',
+  valvePending: 'origen-faro-valvula-pendiente',
+  valveDelivered: 'isla-natal-valvula-entregada',
 } as const;
 
 /* ------------------------------------------------------------------ */
@@ -448,23 +466,6 @@ export const ISLA_NATAL_POIS: IslaNatalPoi[] = [
     },
   },
   {
-    id: 'caja-taller',
-    kind: 'crate',
-    x: 596,
-    y: 704,
-    radius: 56,
-    label: 'Revisar la caja',
-    accentHex: '#d6b98c',
-    dialog: {
-      title: 'Caja de herramientas',
-      paragraphs: [
-        'Alicates, estaño, una lámpara de fósforo y recambios que no corresponden a ninguna herramienta de la isla.',
-        'Al fondo descansa una tabla de madera gastada: rectangular, blanca por el uso, del tamaño exacto de una paleta.',
-      ],
-      hint: 'Al tocarla, la madera vibra un segundo, como si recordara un rebote.',
-    },
-  },
-  {
     id: 'mirador-oleaje',
     kind: 'viewpoint-sea',
     x: 1176,
@@ -528,14 +529,36 @@ export const ARCADE_DIALOG_DUSTY: IslaNatalDialog = {
     'No debería estar aquí: nadie trajo nunca electricidad a esta isla.',
     'Recuerdas la tarde en que llegó. Un viajero viejo, con las manos llenas de estática, la dejó bajo los árboles y dijo que venía de un tiempo que todavía no existe.',
     '«Es tuya —dijo—. Juega. Y no pares hasta ganarme.» Luego se fue hacia el mar y el mar no se lo tragó: simplemente dejó de estar.',
+    'En el lateral hay una ranura de hierro, vacía. El gabinete no arranca sin su palanca.',
   ],
-  hint: 'El interruptor sigue ahí. Podrías encenderla.',
+  hint: 'La palanca que falta debe de estar en el cofre del abuelo, dentro de la cabaña.',
+};
+
+export const ARCADE_DIALOG_MISSING_LEVER: IslaNatalDialog = {
+  title: 'La ranura vacía',
+  subtitle: 'Cobertizo de la arboleda',
+  paragraphs: [
+    'El interruptor baja y vuelve a subir sin resistencia. Falta la palanca que transmite el pulso al tubo.',
+    'El abuelo siempre decía que las máquinas viejas no se encienden con electricidad, sino con alguien que recuerde para qué sirven.',
+    'Su cofre sigue bajo el retrato familiar, en la casa de la pradera.',
+  ],
+  hint: 'Abre el cofre del abuelo con la combinación que te dio el viajero.',
+};
+
+export const ARCADE_DIALOG_LEVER_READY: IslaNatalDialog = {
+  title: 'La palanca del abuelo',
+  subtitle: 'Cobertizo de la arboleda',
+  paragraphs: [
+    'La palanca de hierro encaja en la ranura del gabinete como si hubiera sido forjada para ella. El latón todavía conserva el calor de la casa.',
+    'Al empujarla, el mecanismo muerde el aire y el interruptor encuentra su recorrido. La máquina está lista para recibir el pulso.',
+  ],
+  hint: 'Instalar la palanca despertará el tubo de Pong.',
 };
 
 export const ARCADE_DIALOG_POWER_ON: IslaNatalDialog = {
   title: 'Encender la máquina',
   paragraphs: [
-    'Al pulsar el interruptor, el tubo tarda en despertar: un zumbido grave, una línea blanca que tiembla y por fin el punto de luz.',
+    'Con la palanca del abuelo en su sitio, el tubo tarda en despertar: un zumbido grave, una línea blanca que tiembla y por fin el punto de luz.',
     'La pantalla no refleja tu cara. Refleja la isla entera, vista desde muy arriba, y algo más que aún no reconoces.',
     'Tres goles. Como entonces. Como siempre.',
   ],
@@ -564,7 +587,7 @@ export const ARCADE_DIALOG_SPENT: IslaNatalDialog = {
 export const PADDLE_DIALOG: IslaNatalDialog = {
   title: 'La paleta',
   paragraphs: [
-    'Apoyada contra el gabinete hay una barra blanca, lisa y tibia, del tamaño de tu antebrazo. La madera de la caja de herramientas tenía exactamente esta forma.',
+    'Apoyada contra el gabinete hay una barra blanca, lisa y tibia, del tamaño de tu antebrazo. La misma madera clara que el abuelo guardaba en el cofre.',
     'Al levantarla no pesa. Se acomoda sola en tu mano y el aire de la isla se ordena alrededor, como si la reconociera.',
     'Y entonces lo entiendes sin que nadie te lo explique: esto no es un trofeo. Es un medio de transporte.',
   ],
@@ -612,11 +635,12 @@ export const NATAL_TRAVELER_DIALOG: IslaNatalDialog = {
   paragraphs: [
     'Al fin sales.',
     'Lo que siempre temí. El Reinicio Cero ha llegado.',
-    'Sólo tú puedes devolver las memorias.',
-    'Enciende el viejo Pong del quincho. El que heredaste de tu abuelo.',
-    'Por favor. Ayuda a la humanidad.',
+    'Sólo tú puedes devolver las memorias. Tu abuelo lo sabía, y me encargó que te entregara esto cuando llegara el día.',
+    'Es su letra: «La llave está en el cofre. La combinación es 1972».',
+    'Vuelve a la casa. Abre el cofre y lee lo que dejó para ti. Lo que hay ahí dentro despertará al viejo Pong.',
+    'No lo hagas por curiosidad. Hazlo porque el mundo lo necesita.',
   ],
-  hint: 'La arboleda espera al este de la isla.',
+  hint: 'El cofre del abuelo espera bajo el retrato familiar. La combinación es 1972.',
   lines: [
     { speaker: 'traveler', text: 'Al fin sales.' },
     { speaker: 'pixel', text: '¿Quién eres? ¿Qué fue ese temblor?' },
@@ -624,12 +648,58 @@ export const NATAL_TRAVELER_DIALOG: IslaNatalDialog = {
     { speaker: 'pixel', text: '¿El Reinicio Cero?' },
     { speaker: 'traveler', text: 'El día en que el mundo empezó a olvidar.' },
     { speaker: 'pixel', text: '¿Y por qué vienes a buscarme a mí?' },
-    { speaker: 'traveler', text: 'Porque sólo tú puedes devolver las memorias.' },
-    { speaker: 'pixel', text: '¿Yo? No sé nada de eso.' },
-    { speaker: 'traveler', text: 'Tu abuelo sí. Enciende el viejo Pong del quincho.' },
-    { speaker: 'pixel', text: 'El Pong del abuelo...' },
-    { speaker: 'traveler', text: 'Por favor. La humanidad depende de ti.' },
+    { speaker: 'traveler', text: 'Porque sólo tú puedes devolver las memorias. Tu abuelo lo sabía.' },
+    { speaker: 'traveler', text: 'Me encargó que te entregara esto cuando llegara el día.' },
+    {
+      speaker: 'pixel',
+      text: 'Es su letra... «La llave está en el cofre. La combinación es 1972».',
+    },
+    { speaker: 'pixel', text: 'El cofre del abuelo. Siempre quise saber qué guardaba.' },
+    {
+      speaker: 'pixel',
+      text: 'Él me prometió que algún día lo descubriría. Nunca imaginé que sería así.',
+    },
+    { speaker: 'traveler', text: 'Vuelve a la casa y ábrelo. Lo que hay dentro despertará al viejo Pong.' },
+    { speaker: 'traveler', text: 'No lo hagas por curiosidad. Hazlo porque el mundo lo necesita.' },
+    { speaker: 'pixel', text: 'Entonces no pienso fallarle.' },
   ],
+};
+
+/* ------------------------------------------------------------------ */
+/* EL COFRE DEL ABUELO                                                */
+/* ------------------------------------------------------------------ */
+
+export const NATAL_CHEST_LOCKED_DIALOG: IslaNatalDialog = {
+  title: 'El cofre del abuelo',
+  subtitle: 'Bajo el retrato familiar',
+  paragraphs: [
+    'Un cofre de madera oscura y herrajes de latón, más viejo que la casa. La cerradura tiene cuatro discos numerados y ningún signo de haber sido forzada.',
+    'El abuelo lo dejó aquí antes de irse. Nunca me dijo qué guardaba, sólo que lo abriría cuando llegara el momento.',
+  ],
+  hint: 'Necesito la combinación. Alguien tenía que traérmela.',
+};
+
+export const NATAL_CHEST_REVEAL_DIALOG: IslaNatalDialog = {
+  title: 'La carta del abuelo',
+  subtitle: 'Cofre abierto · Bajo el retrato',
+  paragraphs: [
+    'La tapa cede con un chasquido de latón. Adentro, envueltos en un paño de terciopelo, esperan una palanca de hierro, una fotografía antigua y una carta doblada tres veces.',
+    '«Si estás leyendo esto, el Reinicio Cero ya empezó. No fue una tormenta ni una guerra: fue el día en que el mundo dejó de recordar. Las memorias que la humanidad guardó en sus juegos empezaron a borrarse, una por una, y con ellas se fue todo lo que éramos.',
+    '«Los que lo vimos venir aprendimos a esconder recuerdos dentro de las máquinas viejas. Tu Pong fue una de ellas. Lo desconecté a tiempo para que el Reinicio no pudiera encontrarlo, y dejé aquí la palanca que lo despierta.',
+    '«No te pido que luches. Te pido que juegues, que recuerdes y que devuelvas a cada juego su memoria. Cuando el Pong vuelva a latir, la Isla del Origen te mostrará el camino. Confié en ti desde el primer día. No pares hasta que el mundo vuelva a acordarse.»',
+    'La palanca, la carta y la fotografía ya son tuyas. Lleva la palanca al gabinete de la arboleda e instálala: sin ella, la máquina no volverá a encenderse.',
+  ],
+  hint: 'Objetos obtenidos: Palanca de Pong, Carta del Abuelo y Fotografía del Abuelo.',
+};
+
+export const NATAL_CHEST_EMPTY_DIALOG: IslaNatalDialog = {
+  title: 'El cofre abierto',
+  subtitle: 'Bajo el retrato familiar',
+  paragraphs: [
+    'El terciopelo conserva la huella de la palanca, la carta y la fotografía. El cofre ya cumplió su parte.',
+    'La combinación 1972 sigue grabada en el disco de latón. El abuelo eligió bien el año.',
+  ],
+  hint: 'Lo que el abuelo guardó ya está contigo.',
 };
 
 /* ------------------------------------------------------------------ */

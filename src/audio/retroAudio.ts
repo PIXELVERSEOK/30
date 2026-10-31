@@ -353,6 +353,40 @@ class RetroAudioEngine {
     osc.stop(now + 0.13);
   }
 
+  /** Apagado progresivo de un sistema láser: tres caídas de tensión y un cierre grave. */
+  public laserPowerDown(): void {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    for (let i = 0; i < 3; i += 1) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      const t = now + i * 0.42;
+      osc.frequency.setValueAtTime(760 - i * 130, t);
+      osc.frequency.exponentialRampToValueAtTime(120, t + 0.36);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.055, t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.4);
+    }
+    const close = ctx.createOscillator();
+    const closeGain = ctx.createGain();
+    close.type = 'triangle';
+    close.frequency.setValueAtTime(160, now + 1.28);
+    close.frequency.exponentialRampToValueAtTime(58, now + 1.9);
+    closeGain.gain.setValueAtTime(0.0001, now + 1.28);
+    closeGain.gain.linearRampToValueAtTime(0.07, now + 1.34);
+    closeGain.gain.exponentialRampToValueAtTime(0.001, now + 1.95);
+    close.connect(closeGain);
+    closeGain.connect(ctx.destination);
+    close.start(now + 1.28);
+    close.stop(now + 2);
+  }
+
   public alienExplode(): void {
     const ctx = this.getContext();
     if (!ctx) return;

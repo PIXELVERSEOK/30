@@ -28,6 +28,7 @@ import {
   isEditableTarget,
 } from '../controls/keybindings';
 import { PowersMenuModal } from '../rpg/PowersMenuModal';
+import { LaserLeverRepairOverlay } from './LaserLeverRepairOverlay';
 import {
   BROKEN_RELAY_MECHANISM,
   COASTAL_SUBTERRANEAN_TUNNELS,
@@ -78,10 +79,18 @@ import {
   isPointWalkableOnIsland,
   isBlockedByIslandRouteRail,
   isBlockedByVolcanicGuardGate,
+  isBlockedByOrigenCanal,
+  isBlockedByOrigenFaroGate,
+  isBlockedByOrigenGeneratorGate,
   isBreakoutLegendStoneBlocked,
   isVolcanicArcadeCabinetBlocked,
   isNorthArcadeCabinetBlocked,
   isSouthShortcutUnlocked,
+  ORIGEN_CALA_CANAL,
+  ORIGEN_FARO_BEACON,
+  ORIGEN_FARO_CONSOLE,
+  ORIGEN_FRIEND_HOUSE,
+  ORIGEN_SECTOR_GATE,
   VOLCANIC_ARCADE_LAYOUT,
   VOLCANIC_GUARD_ID,
   ISLAND_PIER_SPEC,
@@ -123,6 +132,10 @@ export interface Origin70sIslandProps {
   onEnterLunarLander?: () => void;
   onEnterNightDriver?: () => void;
   onEnterGalaxian?: () => void;
+  onEnterFrogger?: () => void;
+  onRecordNarrativeEvent?: (eventId: string) => void;
+  onGrantInventoryItems?: (itemIds: string[]) => void;
+  onConsumeInventoryItems?: (itemIds: string[]) => void;
   onSetRpgFlag?: <K extends keyof import('../memories/progressionState').RpgExplorationState>(
     key: K,
     val: import('../memories/progressionState').RpgExplorationState[K]
@@ -159,6 +172,8 @@ export interface Origin70sIslandProps {
   onPurchasePowerUpgrade?: (upgradeId: string, costDiamonds: number) => void;
   onRechargePowers?: () => void;
   onArrivalSequenceFinished?: () => void;
+  /** Travesía de regreso a Isla Natal desde el muelle de la cala. */
+  onTravelToNatal?: () => void;
   isGbGreenMode?: boolean;
   onToggleGbGreenMode?: () => void;
   isAudioMuted?: boolean;
@@ -197,6 +212,9 @@ interface InteractivePromptTarget {
     | 'cave-entrance'
     | 'waterfall-entrance'
     | 'ferry-80s'
+    | 'natal-port'
+    | 'origen-faro-gate'
+    | 'origen-faro-beacon'
     | 'broken-relay'
     | 'chest'
     | 'examinable'
@@ -454,6 +472,10 @@ export function Origin70sIsland({
   onEnterLunarLander,
   onEnterNightDriver,
   onEnterGalaxian,
+  onEnterFrogger,
+  onRecordNarrativeEvent,
+  onGrantInventoryItems,
+  onConsumeInventoryItems,
   onSetRpgFlag,
   onRestoreCuatroCaminos,
   onCollectDiamond,
@@ -480,6 +502,7 @@ export function Origin70sIsland({
   onPurchasePowerUpgrade,
   onRechargePowers,
   onArrivalSequenceFinished,
+  onTravelToNatal,
   isGbGreenMode,
   onToggleGbGreenMode,
   isAudioMuted,
@@ -511,11 +534,21 @@ export function Origin70sIsland({
     allUnlocked
   );
 
+  const hasOrigenEvent = (eventId: string) =>
+    allUnlocked || progressState.island70s.narrativeEvents.includes(eventId);
+  const origenBridgeOpen = hasOrigenEvent('origen-puente-abierto');
+  // La compuerta del Sector 03 responde a la palanca de seguridad: sólo se
+  // abre cuando el láser queda fuera de línea, no al reparar el generador.
+  const origenGeneratorGateOpen = hasOrigenEvent('origen-laser-desactivado');
+  // El Faro del Reinicio (Sector 11) se abre al instalar la válvula de vacío
+  // que el abuelo guardaba en la radio de la cabaña de Isla Natal.
+  const origenFaroGateOpen = hasOrigenEvent('origen-faro-abierto');
+  const origenFaroLit = hasOrigenEvent('origen-faro-encendido');
+
   // La travesía en surf desde el Puerto Norte de la Isla Natal remonta al
-  // final en la arena de la playa de la Zona 1 (Pueblo Origen / Aldea de los
-  // Orígenes), sobre la costa inferior del mapa: el desembarco clásico de la
-  // isla, nunca en el desfiladero interior ni en el mar.
-  const NATAL_SURF_LANDING = { x: 460, y: 2060 };
+  // final sobre el muelle de la cala (Zona 1). El desembarco termina en la
+  // cabecera del muelle, desde donde se camina hacia la arena.
+  const NATAL_SURF_LANDING = { x: 468, y: 2104 };
 
   const determineInitialAreaAndSpawn = (): {
     areaId: RpgAreaId;
@@ -550,9 +583,24 @@ export function Origin70sIsland({
       !isBreakoutLegendStoneBlocked(
         progressState.island70s.lastIslandPos.x,
         progressState.island70s.lastIslandPos.y
+      ) &&
+      !isBlockedByOrigenCanal(
+        progressState.island70s.lastIslandPos.x,
+        progressState.island70s.lastIslandPos.y,
+        origenBridgeOpen
+      ) &&
+      !isBlockedByOrigenGeneratorGate(
+        progressState.island70s.lastIslandPos.x,
+        progressState.island70s.lastIslandPos.y,
+        origenGeneratorGateOpen
+      ) &&
+      !isBlockedByOrigenFaroGate(
+        progressState.island70s.lastIslandPos.x,
+        progressState.island70s.lastIslandPos.y,
+        origenFaroGateOpen
       )
       ? { ...progressState.island70s.lastIslandPos }
-      : { ...ISLAND_KEY_COORDS.awakeningSpawn };
+      : { ...NATAL_SURF_LANDING };
 
     if (arrivalMode === 'return-breakout') {
       return {
@@ -627,12 +675,14 @@ export function Origin70sIsland({
         extReturnY: fallbackExterior.y,
       };
     }
+    // La trama arranca en la arena de la cala: el viajero desembarca al sur
+    // del canal y debe encontrar al viejo amigo antes de cruzar al poblado.
     return {
       areaId: 'exterior-70s',
-      x: ISLAND_KEY_COORDS.awakeningSpawn.x,
-      y: ISLAND_KEY_COORDS.awakeningSpawn.y,
-      extReturnX: ISLAND_KEY_COORDS.awakeningSpawn.x,
-      extReturnY: ISLAND_KEY_COORDS.awakeningSpawn.y,
+      x: NATAL_SURF_LANDING.x,
+      y: NATAL_SURF_LANDING.y,
+      extReturnX: NATAL_SURF_LANDING.x,
+      extReturnY: NATAL_SURF_LANDING.y,
     };
   };
 
@@ -669,6 +719,24 @@ export function Origin70sIsland({
     active: false,
     elapsed: 0,
   });
+  // Escena guionada de llegada: el viejo amigo sale de su casa y intercepta a Pixel.
+  const friendIntroRef = useRef<{
+    elapsed: number;
+    phase: 'emerge' | 'approach';
+    x: number;
+    y: number;
+    startX: number;
+    startY: number;
+    targetX: number;
+    targetY: number;
+  } | null>(null);
+  // Progreso visual del descenso del puente de la cala tras instalar el engranaje.
+  const bridgeAnimRef = useRef<{ start: number; duration: number } | null>(null);
+  // Apagado progresivo del láser de seguridad del Sector 03.
+  const laserShutdownRef = useRef<{ start: number; duration: number } | null>(null);
+  // Apertura de la compuerta PRIORIDAD CERO del Faro del Reinicio (Sector 11).
+  const faroGateAnimRef = useRef<{ start: number; duration: number } | null>(null);
+  const [laserRepairOpen, setLaserRepairOpen] = useState(false);
   const orbitalDashRef = useRef<{ remaining: number; cooldown: number; dx: number; dy: number }>({
     remaining: 0,
     cooldown: 0,
@@ -807,6 +875,7 @@ export function Origin70sIsland({
     Boolean(externalModalOpen) ||
     Boolean(activeDialog) ||
     Boolean(volcanicGuardDialog) ||
+    laserRepairOpen ||
     breakoutSwordExtracting ||
     codexOpen ||
     inventoryOpen ||
@@ -829,6 +898,10 @@ export function Origin70sIsland({
     dkRestored,
     invadersCabinetUnlocked,
     southShortcutActive,
+    origenBridgeOpen,
+    origenGeneratorGateOpen,
+    origenFaroGateOpen,
+    origenFaroLit,
     progressState,
     modalOpen: anyModalOpen,
     breakoutSwordExtracting,
@@ -849,6 +922,10 @@ export function Origin70sIsland({
     dkRestored,
     invadersCabinetUnlocked,
     southShortcutActive,
+    origenBridgeOpen,
+    origenGeneratorGateOpen,
+    origenFaroGateOpen,
+    origenFaroLit,
     progressState,
     modalOpen: anyModalOpen,
     breakoutSwordExtracting,
@@ -870,6 +947,10 @@ export function Origin70sIsland({
     onEnterLunarLander,
     onEnterNightDriver,
     onEnterGalaxian,
+    onEnterFrogger,
+    onRecordNarrativeEvent,
+    onGrantInventoryItems,
+    onConsumeInventoryItems,
     onSetRpgFlag,
     onRestoreCuatroCaminos,
     onCollectDiamond,
@@ -896,6 +977,7 @@ export function Origin70sIsland({
     onPurchasePowerUpgrade,
     onRechargePowers,
     onArrivalSequenceFinished,
+    onTravelToNatal,
   });
   callbacksRef.current = {
     onEnterPong,
@@ -910,6 +992,10 @@ export function Origin70sIsland({
     onEnterLunarLander,
     onEnterNightDriver,
     onEnterGalaxian,
+    onEnterFrogger,
+    onRecordNarrativeEvent,
+    onGrantInventoryItems,
+    onConsumeInventoryItems,
     onSetRpgFlag,
     onRestoreCuatroCaminos,
     onCollectDiamond,
@@ -936,6 +1022,7 @@ export function Origin70sIsland({
     onPurchasePowerUpgrade,
     onRechargePowers,
     onArrivalSequenceFinished,
+    onTravelToNatal,
   };
 
   const setFlightFuel = useCallback((value: number) => {
@@ -1117,6 +1204,51 @@ export function Origin70sIsland({
     startBreakoutSwordExtraction();
   }, [activeAreaId, breakoutRestored, progressState.rpg.discoveredSecretIds, startBreakoutSwordExtraction]);
 
+  // El Pulso Sonar y el Escáner TTL comparten la excavación de montículos.
+  // Se prioriza el montículo con recompensa pendiente más cercano para que un
+  // montículo vacío no bloquee la pieza obligatoria de la trama.
+  const revealNearbySandMound = useCallback((): boolean => {
+    const st = latestStateRef.current;
+    const rangeScale = getScannerRangeScale(st.progressState);
+    const px = playerPosBridgeRef.current.x;
+    const py = playerPosBridgeRef.current.y;
+    let bestMound: (typeof ISLAND_SAND_MOUNDS)[number] | null = null;
+    let bestDist = Infinity;
+    let excavatedNearby: (typeof ISLAND_SAND_MOUNDS)[number] | null = null;
+    let excavatedDist = Infinity;
+    let anyInRange = false;
+    for (const mound of ISLAND_SAND_MOUNDS) {
+      const dist = Math.hypot(px - mound.x, py - mound.y);
+      if (dist >= 150 * rangeScale) continue;
+      anyInRange = true;
+      const alreadyCollected = st.progressState.rpg.openedChestIds.includes(mound.id);
+      if (mound.rewardItemId && !alreadyCollected) {
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestMound = mound;
+        }
+      } else if (alreadyCollected && dist < excavatedDist) {
+        excavatedDist = dist;
+        excavatedNearby = mound;
+      }
+    }
+    if (bestMound && bestMound.rewardItemId) {
+      retroAudio.shardCollect(3);
+      callbacksRef.current.onOpenChest(bestMound.id, [bestMound.rewardItemId]);
+      showToast(`¡Pulso Sonar! Tesoro revelado en ${bestMound.label} y añadido al inventario.`);
+      return true;
+    }
+    if (excavatedNearby) {
+      showToast(`${excavatedNearby.label}: ya fue excavado anteriormente.`);
+      return true;
+    }
+    if (anyInRange) {
+      showToast('Montículo de arena: el pulso no detecta nada más que arena antigua.');
+      return true;
+    }
+    return false;
+  }, [showToast]);
+
   const executeActivePower = useCallback((power: IslandPowerId = activePower) => {
     if (latestStateRef.current.modalOpen || areaTransitionLockRef.current) return;
     const state = latestStateRef.current;
@@ -1218,30 +1350,20 @@ export function Origin70sIsland({
         showToast('¡DASH ORBITAL de Asteroids ejecutado!');
       }
     } else if (power === 'sonar-pulse') {
-      const scannerEnergy = state.progressState.rpg.powersState?.scannerEnergy ?? 0;
-      if (!state.allUnlocked && scannerEnergy < SCANNER_PULSE_COST) {
-        retroAudio.npcBlip(0.7);
-        showToast(
-          `Escáner sin energía (${Math.floor(scannerEnergy)}/${SCANNER_PULSE_COST}). Recarga en un Punto de Guardado GBC.`
-        );
-        return;
-      }
-      if (!state.allUnlocked) {
-        callbacksRef.current.onUpdatePowerEnergy?.(
-          'scannerEnergy',
-          -SCANNER_PULSE_COST
-        );
-      }
+      // El Pulso Sonar es una frecuencia del abuelo, no un artefacto a pilas:
+      // no consume energía ni se agota nunca.
       retroAudio.scannerPing(true);
       scannerPulseRef.current = { active: true, elapsed: 0 };
       setSonarActive(true);
       window.setTimeout(() => setSonarActive(false), 1500);
       const rangePx = Math.round(220 * getScannerRangeScale(state.progressState));
-      showToast(
-        `¡PULSO SONAR de Sea Wolf emitido! Revelando secretos y mecanismos en ${rangePx}px...`
-      );
+      if (!revealNearbySandMound()) {
+        showToast(
+          `¡Pulso Sonar emitido! Revelando secretos y mecanismos en ${rangePx}px...`
+        );
+      }
     }
-  }, [activePower, bladeMode, showToast]);
+  }, [activePower, bladeMode, revealNearbySandMound, showToast]);
 
   const updatePlayerAnimation = useCallback(
     (direction: FacingDirection, timer: number, isWalking: boolean, isSprinting: boolean): number => {
@@ -1380,24 +1502,10 @@ export function Origin70sIsland({
       }
     }
 
-    for (const mound of ISLAND_SAND_MOUNDS) {
-      if (Math.hypot(px - mound.x, py - mound.y) < 150 * rangeScale) {
-        const alreadyCollected = st.progressState.rpg.openedChestIds.includes(mound.id);
-        if (mound.rewardItemId && !alreadyCollected) {
-          retroAudio.shardCollect(3);
-          callbacksRef.current.onOpenChest(mound.id, [mound.rewardItemId]);
-          showToast(`¡Pulso Sonar TTL! Tesoro revelado en ${mound.label} y añadido al inventario.`);
-        } else if (alreadyCollected) {
-          showToast(`Montículo ${mound.label}: ya fue excavado anteriormente.`);
-        } else {
-          showToast(`Montículo ${mound.label}: pulso emitido, solo contiene arena antigua.`);
-        }
-        return;
-      }
-    }
+    if (revealNearbySandMound()) return;
 
-    showToast('Pulso Escáner TTL emitido · Buscando muros falsos, cofres y frecuencias...');
-  }, [showToast]);
+    showToast('Escáner TTL emitido · Buscando muros falsos, cofres y frecuencias...');
+  }, [revealNearbySandMound, showToast]);
 
   const handleToggleLanternAction = useCallback(() => {
     const st = latestStateRef.current;
@@ -1706,6 +1814,29 @@ export function Origin70sIsland({
       if (target.kind === 'building-door') {
         const bldg = ISLAND_70S_BUILDINGS.find((b) => b.id === target.id);
         if (!bldg) return;
+        if (bldg.id === 'bldg-casa-viejo-amigo') {
+          retroAudio.npcBlip(0.72);
+          const alreadyMet =
+            st.allUnlocked ||
+            st.progressState.island70s.narrativeEvents.includes('origen-sonar-entregado') ||
+            st.progressState.rpg.inventoryItems.includes('item-sonar-profundidad');
+          setActiveDialog({
+            category: 'CALA DE LLEGADA · CASA DEL VIEJO AMIGO',
+            title: 'Casa del Viejo Amigo',
+            paragraphs: alreadyMet
+              ? [
+                  'La puerta de madera queda entornada. Adentro huelen la sal, el aceite de máquina y el café recalentado.',
+                  '«Andá tranquilo, Pixel. Yo cuido la cala y el muelle mientras buscás el engranaje.»',
+                ]
+              : [
+                  'La casa está cerrada con llave. Por la ventana se ven herramientas de relojero y un mapa del canal.',
+                  'El viejo amigo salió a recibirte a la playa. Seguramente lo encontrás junto al muelle.',
+                ],
+            hint: 'Hablá con el viejo amigo en la arena, frente a su casa.',
+            accentHex: '#d9b878',
+          });
+          return;
+        }
         exteriorReturnPosRef.current = {
           x: bldg.returnExteriorX,
           y: bldg.returnExteriorY,
@@ -1799,6 +1930,204 @@ export function Origin70sIsland({
           'right',
           '¡Travesía completada! Bienvenido a la Isla Neón 1980s · Muelle de las Vigas Rojas'
         );
+        return;
+      }
+
+      if (target.kind === 'natal-port') {
+        const canTravel = st.pongRestored || st.allUnlocked;
+        if (!canTravel) {
+          retroAudio.npcBlip(0.8);
+          setActiveDialog({
+            category: 'MUELLE DE LA CALA · TRAVESÍA SIN TABLA',
+            title: 'Regreso a Isla Natal',
+            subtitle: 'Amarres firmes, pero sin timón',
+            paragraphs: [
+              'La barca de la cala sigue amarrada a los pilotes: el temporal del Reinicio Cero se llevó sus remos.',
+              'La Barra de Pong que recuperaste en Isla Natal puede surcar el mar si vuelve a estar en tu mochila.',
+            ],
+            hint: 'Completá Pong en Isla Natal y recuperá la Barra de Pong del viajero.',
+            accentHex: '#38bdf8',
+          });
+          return;
+        }
+        if (areaTransitionLockRef.current) return;
+        if (!callbacksRef.current.onTravelToNatal) {
+          showToast('El pasaje a Isla Natal todavía no está habilitado.');
+          return;
+        }
+        areaTransitionLockRef.current = true;
+        virtualInputRef.current.clickTarget = null;
+        callbacksRef.current.onSavePosition(
+          playerPosBridgeRef.current.x,
+          playerPosBridgeRef.current.y
+        );
+        retroAudio.hoverboardLaunch();
+        setFlightStatusText('Barra de Pong sobre el mar · Travesía hacia Isla Natal...');
+        setAreaFadeActive(true);
+        showToast('Zarpando del muelle de la cala · La Barra de Pong surca el mar hacia Isla Natal.');
+        window.setTimeout(() => {
+          callbacksRef.current.onTravelToNatal?.();
+        }, 720);
+        return;
+      }
+
+      // --- SECTOR 11 · COMPUERTA PRIORIDAD CERO DEL FARO DEL REINICIO ---
+      if (target.kind === 'origen-faro-gate') {
+        const narrative = st.progressState.island70s.narrativeEvents;
+        if (st.origenFaroGateOpen) {
+          retroAudio.uiClick();
+          setActiveDialog({
+            category: 'SECTOR 11 · FARO DEL REINICIO',
+            title: 'Compuerta PRIORIDAD CERO',
+            subtitle: 'Sellos abiertos · El acantilado respira',
+            paragraphs: [
+              'La válvula del abuelo zumba dentro del circuito de sincronía. Los batientes se han separado y el paso al acantilado queda libre.',
+              'Más allá se levanta el Faro del Reinicio, con su baliza apagada sobre el mar del tiempo.',
+            ],
+            hint: 'Subí al acantilado y encendé la baliza desde la terraza oriental.',
+            accentHex: '#7dd3fc',
+          });
+          return;
+        }
+        if (faroGateAnimRef.current) {
+          showToast('La compuerta está terminando de abrirse.');
+          return;
+        }
+        if (!narrative.includes('origen-faro-compuerta-hallada')) {
+          callbacksRef.current.onRecordNarrativeEvent?.('origen-faro-compuerta-hallada');
+          callbacksRef.current.onUpdateQuest?.('quest-faro-reinicio', 'active');
+          retroAudio.echoDiscover();
+        }
+        const hasValve = st.progressState.rpg.inventoryItems.includes(
+          'item-valvula-vacio-abuelo'
+        );
+        if (!hasValve) {
+          if (!narrative.includes('origen-faro-valvula-pendiente')) {
+            callbacksRef.current.onRecordNarrativeEvent?.('origen-faro-valvula-pendiente');
+          }
+          retroAudio.npcBlip(0.72);
+          setActiveDialog({
+            category: 'COMPUERTA PRIORIDAD CERO · COSTA DE LAS MÁQUINAS',
+            title: 'Compuerta del Faro del Reinicio',
+            subtitle: 'Sincronía partida · Válvula de vacío ausente',
+            paragraphs: [
+              'La compuerta está sellada por dentro. El registro de la instalación del Sector 03 señala una segunda PRIORIDAD CERO: la del Faro que vigilaba el archipiélago desde este acantilado.',
+              'La onda expansiva del Reinicio Cero fundió la válvula de vacío del circuito de sincronía. El abuelo guardaba un repuesto de 1969 en la radio de la cabaña de Isla Natal; lo mencionaba cada vez que la señal se caía.',
+            ],
+            hint: 'Volvé a Isla Natal desde el muelle de la cala y revisá la radio del abuelo en la cabaña.',
+            accentHex: '#7dd3fc',
+          });
+          return;
+        }
+        setActiveDialog({
+          category: 'COMPUERTA PRIORIDAD CERO · VÁLVULA EN MANO',
+          title: 'Sincronía lista para reconectar',
+          subtitle: 'Válvula de Vacío del Abuelo (1969)',
+          paragraphs: [
+            'El zócalo de la compuerta tiene la misma rosca de latón que la radio de la cabaña. La válvula entra sin forzar.',
+            'Al girarla, el circuito de sincronía debería recuperar el pulso que la onda expansiva le arrancó.',
+          ],
+          primaryAction: {
+            label: 'Instalar Válvula y Abrir',
+            onSelect: () => {
+              setActiveDialog(null);
+              callbacksRef.current.onConsumeInventoryItems?.(['item-valvula-vacio-abuelo']);
+              faroGateAnimRef.current = { start: performance.now(), duration: 1900 };
+              areaTransitionLockRef.current = true;
+              retroAudio.bridgeActivate();
+              window.dispatchEvent(new CustomEvent('pixelverse-shake'));
+              showToast('Válvula instalada · La compuerta PRIORIDAD CERO está abriéndose.');
+              window.setTimeout(() => {
+                faroGateAnimRef.current = null;
+                areaTransitionLockRef.current = false;
+                if (activeAreaRef.current !== 'exterior-70s') return;
+                callbacksRef.current.onRecordNarrativeEvent?.('origen-faro-abierto');
+                callbacksRef.current.onUpdateQuest?.('quest-faro-reinicio', 'active');
+                retroAudio.questComplete();
+                setZoneBanner({
+                  numberLabel: ISLAND_ZONES['faro-reinicio'].numberLabel,
+                  name: ISLAND_ZONES['faro-reinicio'].name,
+                  subtitle: ISLAND_ZONES['faro-reinicio'].subtitle,
+                  accentHex: ISLAND_ZONES['faro-reinicio'].accentHex,
+                });
+                setActiveDialog({
+                  category: 'SECTOR 11 · FARO DEL REINICIO',
+                  title: 'La Compuerta PRIORIDAD CERO se Abrió',
+                  subtitle: 'El acantilado del Faro queda accesible',
+                  paragraphs: [
+                    'La válvula encaja con un golpe seco. El circuito de sincronía recupera el pulso y los batientes se separan hacia los lados, barriendo años de sal y óxido.',
+                    'Detrás aparece un acantilado de piedra caliza: el Faro del Reinicio, su terraza de cristal y un mirador sobre el mar del tiempo. La baliza sigue apagada.',
+                  ],
+                  hint: 'Recorré el acantilado, leé el registro de ondas y encendé la baliza.',
+                  accentHex: '#7dd3fc',
+                });
+              }, 1900);
+            },
+          },
+          accentHex: '#7dd3fc',
+        });
+        return;
+      }
+
+      // --- SECTOR 11 · BALIZA DEL FARO ---
+      if (target.kind === 'origen-faro-beacon') {
+        if (!st.origenFaroGateOpen) {
+          showToast('La baliza sólo es accesible desde la terraza del Faro.');
+          return;
+        }
+        if (st.origenFaroLit) {
+          retroAudio.uiClick();
+          setActiveDialog({
+            category: 'FARO DEL REINICIO · BALIZA ENCENDIDA',
+            title: 'El haz sobre el mar del tiempo',
+            subtitle: 'El archipiélago vuelve a tener una referencia',
+            paragraphs: [
+              'El haz gira despacio sobre el agua. Cada barrido ilumina, por un instante, contornos de islas que el Reinicio Cero borró de los mapas.',
+              'La lente de Fresnel proyecta el pulso de 1969: el mismo que el abuelo escuchaba en su radio todas las noches.',
+            ],
+            hint: 'La terraza guarda un arcón con la lente de repuesto. El mirador sur conserva un diamante del acantilado.',
+            accentHex: '#fde68a',
+          });
+          return;
+        }
+        setActiveDialog({
+          category: 'FARO DEL REINICIO · CONSOLA DE LA BALIZA',
+          title: 'Encender la Baliza',
+          subtitle: 'Lente de Fresnel en posición · Válvula estabilizada',
+          paragraphs: [
+            'La consola de la terraza conserva la manivela de cobre. La lente de Fresnel está limpia y el mecanismo de giro responde.',
+            'Al cerrar el circuito, el Faro volverá a barrer el archipiélago con su haz. No es un adorno: es una referencia para todo lo que quedó a la deriva tras el Reinicio Cero.',
+          ],
+          primaryAction: {
+            label: 'Encender la Baliza',
+            onSelect: () => {
+              setActiveDialog(null);
+              areaTransitionLockRef.current = true;
+              retroAudio.bridgeActivate();
+              showToast('El mecanismo de giro arranca · La baliza del Faro está encendiéndose.');
+              window.setTimeout(() => {
+                areaTransitionLockRef.current = false;
+                if (activeAreaRef.current !== 'exterior-70s') return;
+                callbacksRef.current.onRecordNarrativeEvent?.('origen-faro-encendido');
+                callbacksRef.current.onUpdateQuest?.('quest-faro-reinicio', 'completed');
+                retroAudio.achievementUnlock();
+                setActiveDialog({
+                  category: 'FARO DEL REINICIO · BALIZA ENCENDIDA',
+                  title: 'El Archipiélago Recupera su Faro',
+                  subtitle: 'Nueva revelación sobre el Reinicio Cero',
+                  paragraphs: [
+                    'El haz nace en la lente y barre el mar. En el primer giro, la luz recorta sobre el horizonte los contornos de islas que ningún mapa recuerda: la silueta de una ciudad costera, un muelle doble, una torre de radio.',
+                    'El registro de ondas del faro no era un diario de tormentas: era un catálogo de islas. El Reinicio Cero no sólo borró los videojuegos de la memoria; también ocultó los lugares donde se conservaban.',
+                    'La manivela sigue girando. Alguien, desde algún punto del archipiélago, acaba de ver la luz.',
+                  ],
+                  hint: 'El Faro permanece encendido. Explorá la terraza, el mirador y el arcón antes de volver al muelle.',
+                  accentHex: '#fde68a',
+                });
+              }, 1700);
+            },
+          },
+          accentHex: '#7dd3fc',
+        });
         return;
       }
 
@@ -1957,6 +2286,26 @@ export function Origin70sIsland({
           return;
         }
 
+        if (
+          chest.id === 'chest-lago-germanio' &&
+          !st.progressState.games['frogger']?.memoryUnlocked &&
+          !st.allUnlocked
+        ) {
+          retroAudio.npcBlip(0.8);
+          setActiveDialog({
+            category: 'ORILLA OPUESTA DEL LAGO · CAJA ESTANCA BLOQUEADA',
+            title: chest.label,
+            subtitle: 'Lector de memoria sin firma',
+            paragraphs: [
+              'La caja de germanio está dentro de una carcasa de seguridad con un lector de memoria. La pantalla exige una firma arcade que el Reinicio Cero borró del registro.',
+              'Dylan cree que el gabinete «Cruce de Circuitos» conserva esa firma. Hasta recuperarla, la carcasa no liberará los transistores.',
+            ],
+            hint: 'Superá la memoria anfibia del gabinete en el bosque y volvé a esta caja.',
+            accentHex: '#fb923c',
+          });
+          return;
+        }
+
         retroAudio.chestOpen();
         callbacksRef.current.onOpenChest(chest.id, chest.rewardItemIds);
         const rewardNames = chest.rewardItemIds
@@ -2005,6 +2354,373 @@ export function Origin70sIsland({
             'up',
             'Cámara Oculta de 1958 · Sala Secreta'
           );
+          return;
+        }
+
+        // --- TRAMA PRINCIPAL · PUENTE DE LA CALA ---
+        if (target.id === 'exam-puente-cala') {
+          if (bridgeAnimRef.current) {
+            retroAudio.npcBlip(0.7);
+            showToast('El torno está en marcha · El puente sigue descendiendo sobre el canal.');
+            return;
+          }
+          if (st.origenBridgeOpen) {
+            retroAudio.uiClick();
+            setActiveDialog({
+              category: exam.category,
+              title: exam.label,
+              subtitle: 'Puente desplegado',
+              paragraphs: [
+                'El engranaje de bronce transmite el giro del torno y las vigas descansan sobre el canal. El paso al poblado está abierto.',
+              ],
+              hint: 'Cruzá el puente hacia el norte y seguí el sendero hasta el asentamiento.',
+              accentHex: exam.accentHex,
+            });
+            return;
+          }
+          const hasGear = st.progressState.rpg.inventoryItems.includes('item-engranaje-puente');
+          if (hasGear) {
+            callbacksRef.current.onConsumeInventoryItems?.(['item-engranaje-puente']);
+            callbacksRef.current.onRecordNarrativeEvent?.('origen-puente-abierto');
+            bridgeAnimRef.current = { start: performance.now(), duration: 2600 };
+            areaTransitionLockRef.current = true;
+            retroAudio.bridgeActivate();
+            window.dispatchEvent(new CustomEvent('pixelverse-shake'));
+            showToast(
+              'Engranaje montado · Las cadenas se tensan y el puente comienza a descender.'
+            );
+            window.setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('pixelverse-shake'));
+            }, 1250);
+            window.setTimeout(() => {
+              bridgeAnimRef.current = null;
+              areaTransitionLockRef.current = false;
+              if (activeAreaRef.current !== 'exterior-70s') return;
+              retroAudio.questComplete();
+              setActiveDialog({
+                category: exam.category,
+                title: 'Mecanismo del Puente de la Cala',
+                subtitle: 'Puente desplegado · Paso al asentamiento abierto',
+                paragraphs: [
+                  'La rueda dentada encaja en el torno con un chasquido seco. Las cadenas se tensan, las vigas de madera descienden con peso y el extremo sur se apoya firme sobre la otra orilla.',
+                  'El camino hacia el asentamiento de Isla Origen queda abierto. El viejo amigo observa desde la arena y asiente.',
+                ],
+                hint: 'Cruzá el puente caminando hacia el norte y subí por el sendero. El taller Retro State TS está en el bosque.',
+                accentHex: '#22c55e',
+              });
+            }, 2600);
+            return;
+          }
+          retroAudio.npcBlip(0.7);
+          setActiveDialog({
+            category: exam.category,
+            title: exam.label,
+            subtitle: 'Torno vacío · Falta el engranaje',
+            paragraphs: [
+              'El torno del puente gira en vacío: falta la rueda dentada de bronce que transmite el movimiento a las cadenas.',
+              'La arena de la cala guarda objetos antiguos bajo su superficie. El Pulso Sonar puede revelarlos.',
+            ],
+            hint: 'Usá el Pulso Sonar sobre los montículos de arena de la cala y recuperá el Engranaje del Puente.',
+            accentHex: exam.accentHex,
+          });
+          return;
+        }
+
+        // --- TRAMA PRINCIPAL · GENERADOR DEL SECTOR 03 ---
+        if (target.id === 'exam-generador-retrostate') {
+          const partDelivered =
+            st.allUnlocked ||
+            st.progressState.island70s.narrativeEvents.includes('origen-pieza-entregada');
+          const generatorFixed =
+            st.allUnlocked ||
+            st.progressState.island70s.narrativeEvents.includes('origen-generador-reparado');
+          if (generatorFixed) {
+            retroAudio.uiClick();
+            setActiveDialog({
+              category: exam.category,
+              title: 'Generador del Sector 03',
+              subtitle: 'Taller energizado · Láser bajo control de la palanca',
+              paragraphs: [
+                'El generador zumba con una frecuencia estable. El taller recuperó su energía y los osciloscopios vuelven a latir.',
+                'El paso al Sector 03, en cambio, responde al sistema de seguridad láser. La palanca del bosque sigue siendo la única que puede dar la orden de apagado.',
+              ],
+              hint: 'Repará y accioná la palanca de seguridad junto a la compuerta del Sector 03.',
+              accentHex: '#22c55e',
+            });
+            return;
+          }
+          if (partDelivered) {
+            callbacksRef.current.onRecordNarrativeEvent?.('origen-generador-reparado');
+            callbacksRef.current.onUpdateQuest?.('quest-generador-retrostate', 'completed');
+            retroAudio.bridgeActivate();
+            showToast('Generador reparado · Taller Retro State TS energizado.');
+            setActiveDialog({
+              category: exam.category,
+              title: 'Generador del Sector 03',
+              subtitle: '¡Reparación completada!',
+              paragraphs: [
+                'La pieza nueva encaja en el rotor y el generador arranca con un zumbido grave. Las luces del taller parpadean y se estabilizan.',
+                'La energía vuelve a las mesas y a los osciloscopios, pero la compuerta del bosque no se mueve: su láser de seguridad tiene su propio mecanismo electrónico. Dylan sabe cómo repararlo.',
+              ],
+              hint: 'Hablá con Dylan sobre la palanca de seguridad y el láser del Sector 03.',
+              accentHex: '#22c55e',
+            });
+            return;
+          }
+          const hasPart = st.progressState.rpg.inventoryItems.includes('item-pieza-generador');
+          retroAudio.npcBlip(0.7);
+          setActiveDialog({
+            category: exam.category,
+            title: 'Generador del Sector 03',
+            subtitle: hasPart ? 'Pieza en la mochila · Falta autorización' : 'Rotor averiado · Sin pieza',
+            paragraphs: hasPart
+              ? [
+                  'La pieza del generador está en tu mochila, pero el maestro Kertz debe revisarla y autorizar el montaje.',
+                  'Volvé con él al taller y entregásela antes de tocar el rotor.',
+                ]
+              : [
+                  'El rotor principal está partido. Sin la pieza de repuesto, el generador no arrancará y el taller seguirá a oscuras.',
+                  'El maestro Kertz sabe dónde conseguirla. Hablá con él en el taller Retro State TS.',
+                ],
+            hint: hasPart
+              ? 'Entregale la Pieza del Generador al maestro Kertz.'
+              : 'Hablá con el maestro Kertz en el taller Retro State TS para iniciar la misión.',
+            accentHex: exam.accentHex,
+          });
+          return;
+        }
+
+        // --- TRAMA PRINCIPAL · PALANCA DEL LÁSER DE SEGURIDAD ---
+        if (target.id === 'exam-palanca-laser') {
+          const narrative = st.progressState.island70s.narrativeEvents;
+          const laserOpen = st.origenGeneratorGateOpen;
+          const repaired = narrative.includes('origen-laser-controles-reparados');
+          const questStarted =
+            st.progressState.rpg.questStates['quest-laser-seguridad'] !== undefined;
+          const froggerCleared = Boolean(
+            st.progressState.games['frogger']?.memoryUnlocked
+          );
+          const hasIron = st.progressState.rpg.inventoryItems.includes(
+            'item-soldador-estaño'
+          );
+
+          if (laserShutdownRef.current) {
+            showToast('La orden de apagado ya está recorriendo el sistema.');
+            return;
+          }
+
+          if (laserOpen) {
+            retroAudio.uiClick();
+            setActiveDialog({
+              category: exam.category,
+              title: 'Consola de la Palanca de Seguridad',
+              subtitle: 'Sistema fuera de línea · Paso abierto',
+              paragraphs: [
+                'La palanca descansa en posición de apagado. Los indicadores de la consola están en verde y los emisores del paso ya no emiten ningún haz.',
+                'El Sector 03 queda abierto. Más allá, entre la hiedra, se distinguen los restos de una instalación antigua.',
+              ],
+              hint: 'Cruzá el paso y examiná la instalación cubierta por la vegetación.',
+              accentHex: '#22c55e',
+            });
+            return;
+          }
+
+          if (repaired) {
+            setActiveDialog({
+              category: exam.category,
+              title: 'Consola de la Palanca de Seguridad',
+              subtitle: 'Contactos soldados · Lista para enviar la orden',
+              paragraphs: [
+                'La continuidad está cerrada. Al empujar la palanca, la consola enviará la orden de apagado sección por sección.',
+                'Los haces deberían caer de abajo hacia arriba hasta que el paso quede limpio.',
+              ],
+              primaryAction: {
+                label: 'Accionar la Palanca',
+                onSelect: () => {
+                  setActiveDialog(null);
+                  laserShutdownRef.current = {
+                    start: performance.now(),
+                    duration: 3000,
+                  };
+                  areaTransitionLockRef.current = true;
+                  retroAudio.laserPowerDown();
+                  window.dispatchEvent(new CustomEvent('pixelverse-shake'));
+                  showToast('Orden de apagado enviada · Los haces están cayendo.');
+                  window.setTimeout(() => {
+                    laserShutdownRef.current = null;
+                    areaTransitionLockRef.current = false;
+                    if (activeAreaRef.current !== 'exterior-70s') return;
+                    callbacksRef.current.onRecordNarrativeEvent?.(
+                      'origen-laser-desactivado'
+                    );
+                    callbacksRef.current.onUpdateQuest?.(
+                      'quest-laser-seguridad',
+                      'completed'
+                    );
+                    callbacksRef.current.onUpdateQuest?.(
+                      'quest-instalacion-oculta',
+                      'active'
+                    );
+                    retroAudio.questComplete();
+                    setActiveDialog({
+                      category: 'SECTOR 03 · SISTEMA DE SEGURIDAD OFFLINE',
+                      title: 'El Paso Láser se Apagó',
+                      subtitle: 'Los haces cayeron por sectores',
+                      paragraphs: [
+                        'La palanca baja con un chasquido. Los emisores inferiores pierden intensidad, luego los del medio, y por último el haz superior se apaga con un suspiro eléctrico.',
+                        'La consola muestra SYSTEM OFFLINE. El paso al Sector 03 queda libre, sin descargas ni bloqueos. Del otro lado, la vegetación cubre los restos de una instalación que el sistema llevaba años protegiendo.',
+                      ],
+                      hint: 'Cruzá el paso y examiná la instalación antigua. Algo más te espera detrás del láser.',
+                      accentHex: '#22c55e',
+                    });
+                  }, 3000);
+                },
+              },
+              accentHex: '#22c55e',
+            });
+            return;
+          }
+
+          if (!questStarted) {
+            retroAudio.npcBlip(0.72);
+            setActiveDialog({
+              category: exam.category,
+              title: exam.label,
+              subtitle: 'Mecanismo sin respuesta',
+              paragraphs: [
+                'La palanca se mueve en vacío. Los indicadores siguen en rojo y el láser zumba sin interrupción: la orden de apagado no llega al sistema.',
+                'Los contactos electrónicos de la consola están partidos. El técnico Dylan, en el Taller Retro State TS del bosque, sabe cómo devolverles la continuidad.',
+              ],
+              hint: 'Hablá con Dylan en el taller y contale lo que viste en la palanca.',
+              accentHex: '#f97316',
+            });
+            return;
+          }
+
+          if (!froggerCleared) {
+            retroAudio.npcBlip(0.7);
+            setActiveDialog({
+              category: exam.category,
+              title: exam.label,
+              subtitle: 'La palanca sigue muerta',
+              paragraphs: [
+                'La consola no responde. Dylan no quiere que fuerces el mecanismo sin antes comprobar que podés recuperar una memoria arcade sin dañarla.',
+                'El gabinete «Cruce de Circuitos» sigue esperando en el claro del bosque.',
+              ],
+              hint: 'Superá el gabinete del bosque y volvé a hablar con Dylan.',
+              accentHex: '#f97316',
+            });
+            return;
+          }
+
+          if (!hasIron) {
+            retroAudio.npcBlip(0.7);
+            setActiveDialog({
+              category: exam.category,
+              title: exam.label,
+              subtitle: 'Falta el soldador de estaño',
+              paragraphs: [
+                'El diagnóstico es claro: tres contactos fríos, con la soldadura resquebrajada. Sin estaño y sin la punta fina del soldador de Dylan, no hay forma de cerrar la continuidad.',
+                'Dylan necesita germanio de repuesto. La caja estanca quedó en la orilla opuesta del lago del bosque.',
+              ],
+              hint: 'Rodeá el lago por el este, recuperá los transistores y lleváselos a Dylan en el taller.',
+              accentHex: '#fb923c',
+            });
+            return;
+          }
+
+          setActiveDialog({
+            category: exam.category,
+            title: exam.label,
+            subtitle: 'Contactos fríos detectados · Soldador listo',
+            paragraphs: [
+              'Con la punta del soldador iluminás la placa. Tres uniones están resquebrajadas por las ondas del Reinicio Cero; las otras tres mantienen continuidad.',
+              'Identificá las uniones dañadas y soldalas sin puentear las pistas vecinas.',
+            ],
+            primaryAction: {
+              label: 'Iniciar Reparación de Contactos',
+              onSelect: () => {
+                setActiveDialog(null);
+                setLaserRepairOpen(true);
+              },
+            },
+            accentHex: '#f97316',
+          });
+          return;
+        }
+
+        // --- SECTOR 03 · INSTALACIÓN QUE EL LÁSER PROTEGÍA ---
+        if (target.id === 'exam-instalacion-seguridad') {
+          const narrative = st.progressState.island70s.narrativeEvents;
+          if (!narrative.includes('origen-instalacion-investigada')) {
+            callbacksRef.current.onRecordNarrativeEvent?.(
+              'origen-instalacion-investigada'
+            );
+            callbacksRef.current.onUpdateQuest?.('quest-instalacion-oculta', 'active');
+            retroAudio.echoDiscover();
+          }
+          setActiveDialog({
+            category: exam.category,
+            title: exam.label,
+            subtitle: 'Conductos mudos bajo la hiedra',
+            paragraphs: [
+              ...exam.paragraphs,
+              'No hay energía en los conductos. Si el sistema láser vigilaba este lugar, no lo hacía para impedir la entrada: lo hacía para que nadie llegara hasta lo que hay más adentro.',
+            ],
+            hint: exam.hint,
+            accentHex: exam.accentHex,
+          });
+          return;
+        }
+
+        if (target.id === 'exam-panel-instalacion') {
+          const narrative = st.progressState.island70s.narrativeEvents;
+          if (!narrative.includes('origen-panel-instalacion-leido')) {
+            callbacksRef.current.onRecordNarrativeEvent?.(
+              'origen-panel-instalacion-leido'
+            );
+            callbacksRef.current.onUpdateQuest?.('quest-instalacion-oculta', 'completed');
+            retroAudio.caseDeductionSolved();
+          }
+          setActiveDialog({
+            category: exam.category,
+            title: exam.label,
+            subtitle: 'Registro incompleto · PRIORIDAD CERO',
+            paragraphs: exam.paragraphs,
+            hint: exam.hint,
+            accentHex: exam.accentHex,
+          });
+          return;
+        }
+
+        // --- TRAMA PRINCIPAL · GABINETE DEL CRUCE DE CIRCUITOS ---
+        if (target.id === 'exam-gabinete-circuito-anfibio') {
+          const froggerCleared = Boolean(st.progressState.games['frogger']?.memoryUnlocked);
+          const questStarted = Boolean(
+            st.progressState.rpg.questStates['quest-generador-retrostate'] ||
+              st.progressState.rpg.questStates['quest-laser-seguridad']
+          );
+          if (st.allUnlocked || froggerCleared || questStarted) {
+            callbacksRef.current.onSavePosition(
+              playerPosBridgeRef.current.x,
+              playerPosBridgeRef.current.y
+            );
+            retroAudio.uiClick();
+            callbacksRef.current.onEnterFrogger?.();
+            return;
+          }
+          retroAudio.npcBlip(0.7);
+          setActiveDialog({
+            category: exam.category,
+            title: exam.label,
+            subtitle: 'Gabinete apagado · Sin misión activa',
+            paragraphs: [
+              'El prototipo «Cruce de Circuitos» duerme bajo una capa de polvo. Su placa necesita una orden del taller para arrancar.',
+              'Dylan, el técnico de Retro State TS, conoce el protocolo para recuperar esta memoria de 1979.',
+            ],
+            hint: 'Hablá con Dylan en el taller Retro State TS del bosque.',
+            accentHex: exam.accentHex,
+          });
           return;
         }
 
@@ -2288,6 +3004,112 @@ export function Origin70sIsland({
         callbacksRef.current.onTalkNpc(snpc.id);
 
         if (snpc.id === 'npc-dylan-tecnico') {
+          const narrative = st.progressState.island70s.narrativeEvents;
+          const laserDone = st.allUnlocked || narrative.includes('origen-laser-desactivado');
+          const froggerCleared = Boolean(st.progressState.games['frogger']?.memoryUnlocked);
+          const hasLakeTransistors = st.progressState.rpg.inventoryItems.includes(
+            'item-transistores-germanio-lago'
+          );
+          const hasSolderingIron = st.progressState.rpg.inventoryItems.includes(
+            'item-soldador-estaño'
+          );
+          const laserRepaired = narrative.includes('origen-laser-controles-reparados');
+
+          // --- TRAMA PRINCIPAL: EL LÁSER DE SEGURIDAD Y LA PALANCA ---
+          if (!laserDone) {
+            if (hasLakeTransistors) {
+              setActiveDialog({
+                category: 'RETRO STATE TS · ENTREGA DE COMPONENTES',
+                title: snpc.name,
+                subtitle: 'Germanio del lago en la mochila',
+                paragraphs: [
+                  '«Esos son los tres transistores del Reinicio Cero. La caja estanca los protegió del agua y del calor; las patillas siguen limpias.»',
+                  '«Con este germanio y un poco de estaño puedo devolverle la continuidad a la palanca. Tomá mi soldador de lápiz: la punta está afilada para no quemar las pistas vecinas.»',
+                ],
+                primaryAction: {
+                  label: 'Entregar el Germanio y Recibir el Soldador',
+                  onSelect: () => {
+                    callbacksRef.current.onConsumeInventoryItems?.([
+                      'item-transistores-germanio-lago',
+                    ]);
+                    callbacksRef.current.onOpenChest('origen-dylan-soldador', [
+                      'item-soldador-estaño',
+                    ]);
+                    callbacksRef.current.onRecordNarrativeEvent?.(
+                      'origen-transistores-lago-entregados'
+                    );
+                    callbacksRef.current.onRecordNarrativeEvent?.('origen-soldador-entregado');
+                    callbacksRef.current.onUpdateQuest('quest-laser-seguridad', 'active');
+                    retroAudio.questComplete();
+                    setActiveDialog({
+                      category: 'RETRO STATE TS · HERRAMIENTA ENTREGADA',
+                      title: 'Soldador de Estaño de Dylan',
+                      subtitle: 'La palanca ya puede recibir la orden de apagado',
+                      paragraphs: [
+                        '«Escuchá bien: en la consola hay seis contactos. Tres están fríos, con la soldadura resquebrajada por las ondas del Reinicio. Sólo esos necesitan estaño.»',
+                        '«Calentá cada punto dañado y unilo con pulso firme. Cuando la continuidad cierre, la palanca va a responder y el láser va a apagarse por sectores.»',
+                      ],
+                      hint: 'Volvé a la consola de la palanca, al oeste de la compuerta. Identificá los contactos fríos y soldalos con [E].',
+                      accentHex: '#f97316',
+                    });
+                  },
+                },
+                accentHex: '#fb923c',
+              });
+              return;
+            }
+
+            if (froggerCleared) {
+              callbacksRef.current.onUpdateQuest('quest-laser-seguridad', 'active');
+              setActiveDialog({
+                category: snpc.role.toUpperCase(),
+                title: snpc.name,
+                subtitle: laserRepaired
+                  ? 'La palanca ya tiene continuidad'
+                  : hasSolderingIron
+                    ? 'Soldador entregado · La consola espera'
+                    : 'Memoria recuperada · Falta el germanio',
+                paragraphs: laserRepaired
+                  ? [
+                      '«Ya soldaste los contactos de la palanca. No queda nada que reparar: volvé a la consola y accioná la palanca para enviar la orden de apagado.»',
+                      '«Los haces deberían caer por sectores. No te quedes parado sobre la línea cuando empiecen a bajar.»',
+                    ]
+                  : hasSolderingIron
+                    ? [
+                        '«Ya tenés mi soldador. La consola de la palanca está al oeste de la compuerta: seis contactos, tres fríos.»',
+                        '«Calentá cada punto dañado y unilo con pulso firme. Cuando cierres la continuidad, la palanca va a responder.»',
+                      ]
+                    : [
+                        '«Recuperaste la memoria anfibia del gabinete. Eso me dice que podés devolverle la función a una máquina vieja, no sólo mirarla.»',
+                        '«Ahora necesito germanio. En la orilla opuesta del lago del bosque quedó una caja estanca con tres transistores que sobrevivieron al Reinicio Cero. El lago corta el paso directo: rodealo por el este.»',
+                      ],
+                hint: laserRepaired
+                  ? 'Accioná la palanca de la consola de seguridad, al oeste de la compuerta del Sector 03.'
+                  : hasSolderingIron
+                    ? 'Volvé a la consola de la palanca y soldá los contactos fríos con [E].'
+                    : 'Bajá por el este del lago, cruzá a la orilla opuesta y abrí la caja estanca.',
+                accentHex: laserRepaired || hasSolderingIron ? '#22c55e' : '#fb923c',
+              });
+              return;
+            }
+
+            callbacksRef.current.onUpdateQuest('quest-laser-seguridad', 'active');
+            setActiveDialog({
+              category: snpc.role.toUpperCase(),
+              title: snpc.name,
+              subtitle: 'El láser no es un enemigo',
+              paragraphs: [
+                '«Ese muro de luz que corta el paso al Sector 03 no lo puso nadie para castigar a los viajeros. Es el sistema de seguridad de una instalación antigua, y se activó solo cuando el Reinicio Cero sacudió la isla.»',
+                '«Las ondas expansivas fundieron parte del mecanismo electrónico de la palanca que debería apagarlo. Puedo repararla, pero necesito estaño y germanio de repuesto… y antes quiero comprobar algo.»',
+                '«En el claro del bosque hay un gabinete de cruce de canales que sobrevivió al Reinicio. Si lográs recuperar esa memoria de videojuego, sabré que podés devolverle la función a la palanca sin romperla.»',
+              ],
+              hint: 'Encontrá el gabinete «Cruce de Circuitos» en el bosque, al este del taller, y superá la memoria anfibia de 1979.',
+              accentHex: '#fb923c',
+            });
+            return;
+          }
+
+          // Láser ya apagado: continúa con la trama de Los Cuatro Caminos.
           const cuatroCaminosDone = st.progressState.rpg.cuatroCaminosRestored;
           const hasTransistors =
             st.progressState.rpg.inventoryItems.includes('item-transistores-germanio') ||
@@ -2354,18 +3176,94 @@ export function Origin70sIsland({
           const hasCap =
             st.progressState.rpg.inventoryItems.includes('item-condensador-cuarzo') ||
             st.allUnlocked;
-          if (qDone) {
+          const generatorRepaired = st.progressState.island70s.narrativeEvents.includes(
+            'origen-generador-reparado'
+          );
+          const partDelivered = st.progressState.island70s.narrativeEvents.includes('origen-pieza-entregada');
+          const hasPart = st.progressState.rpg.inventoryItems.includes('item-pieza-generador');
+          const generatorQuest = st.progressState.rpg.questStates['quest-generador-retrostate'];
+
+          if (!generatorRepaired) {
+            if (partDelivered) {
+              setActiveDialog({
+                category: snpc.role.toUpperCase(),
+                title: snpc.name,
+                subtitle: 'Pieza verificada · Falta montarla',
+                paragraphs: [
+                  '«La pieza está en orden. Ya la revisé y la dejé preparada para el rotor.»',
+                  '«Andá a la sala de máquinas y montala en el generador del Sector 03. Con la energía de vuelta, el taller vuelve a respirar; la compuerta del bosque la sigue mandando la palanca de seguridad.»',
+                ],
+                hint: 'Examiná el Generador del Sector 03 en la sala de máquinas del taller y montá la pieza.',
+                accentHex: '#22c55e',
+              });
+              return;
+            }
+            if (hasPart) {
+              setActiveDialog({
+                category: 'RETRO STATE TS · ENTREGA DE PIEZA',
+                title: snpc.name,
+                subtitle: 'Pieza del Generador en tu mochila',
+                paragraphs: [
+                  '«Esa es la pieza que faltaba. La reconozco por el sello del Cruce de Circuitos.»',
+                  '«Dejamela revisar un momento antes de montarla. No quiero que el rotor se descalibre.»',
+                ],
+                primaryAction: {
+                  label: 'Entregar la Pieza del Generador',
+                  onSelect: () => {
+                    callbacksRef.current.onConsumeInventoryItems?.(['item-pieza-generador']);
+                    callbacksRef.current.onRecordNarrativeEvent?.('origen-pieza-entregada');
+                    retroAudio.questComplete();
+                    setActiveDialog({
+                      category: 'RETRO STATE TS · MISIÓN CUMPLIDA',
+                      title: snpc.name,
+                      subtitle: 'Pieza recibida · Montala en el generador',
+                      paragraphs: [
+                        '«Perfecta. Encaja en el rotor sin holgura. Ahora llevala a la sala de máquinas y montala en el generador del Sector 03.»',
+                        '«Cuando arranque, el taller recupera luz y corriente. La compuerta de energía del bosque responde a otra cosa: la palanca de seguridad del Sector 03.»',
+                      ],
+                      hint: 'Examiná el Generador del Sector 03 en la sala de máquinas del taller y montá la pieza.',
+                      accentHex: '#22c55e',
+                    });
+                  },
+                },
+                accentHex: '#f59e0b',
+              });
+              return;
+            }
+            if (generatorQuest) {
+              setActiveDialog({
+                category: 'RETRO STATE TS · MISIÓN ACTIVA',
+                title: snpc.name,
+                subtitle: 'Misión: La Pieza del Generador [Q]',
+                paragraphs: [
+                  '«El prototipo «Cruce de Circuitos» duerme en el bosque, al este del taller. Su placa todavía responde.»',
+                  '«Superá sus tres carriles y el gabinete imprimirá la pieza que necesitamos para el rotor.»',
+                ],
+                hint: 'Buscá el gabinete «Cruce de Circuitos» en el bosque, al noreste del taller, y superá el desafío.',
+                accentHex: '#f59e0b',
+              });
+              return;
+            }
+
+            callbacksRef.current.onUpdateQuest('quest-generador-retrostate', 'active');
             setActiveDialog({
               category: snpc.role.toUpperCase(),
               title: snpc.name,
-              subtitle: 'Misión Completada · Soldador Lógico entregado',
+              subtitle: 'Nueva Misión: La Pieza del Generador [Q]',
               paragraphs: [
-                '«¡Ese Condensador de Cuarzo estabilizó todos mis osciloscopios! Usa bien el Soldador Lógico en las Ruinas del Sur para reactivar el viejo relé del puente costero.»',
-                '«Por cierto... ¿has notado la corriente fría que sale de los ladrillos del muro norte?»',
+                '«Pixel, llegaste en mal momento... o en el mejor. El generador del Sector 03 se quedó sin rotor y el taller está a oscuras.»',
+                '«El único repuesto que conozco está dentro del viejo prototipo «Cruce de Circuitos», un gabinete que instalé en el bosque hace años. Si superás sus tres carriles, la máquina imprimirá la pieza.»',
+                '«Traémela, la reviso y te autorizo el montaje. Con el generador en marcha el taller vuelve a respirar; de la compuerta se ocupa Dylan, que está al fondo.»',
               ],
-              accentHex: snpc.palette.glow,
+              hint: 'Salí del taller y buscá el gabinete «Cruce de Circuitos» en el bosque. Luego volvé con la pieza.',
+              accentHex: '#f59e0b',
             });
-          } else if (hasCap) {
+            return;
+          }
+
+          // El generador ya funciona: queda disponible el encargo secundario
+          // del Condensador de Cuarzo, sin borrar la misión original.
+          if (!qDone && hasCap) {
             retroAudio.questComplete();
             callbacksRef.current.onUpdateQuest('quest-taller-ttl', 'completed', [
               'item-soldador-logico',
@@ -2381,20 +3279,34 @@ export function Origin70sIsland({
               hint: 'Nueva herramienta desbloqueada en tu Mochila [I]: Soldador Lógico.',
               accentHex: '#10b981',
             });
-          } else {
+            return;
+          }
+          if (!qDone) {
             callbacksRef.current.onUpdateQuest('quest-taller-ttl', 'active');
             setActiveDialog({
               category: snpc.role.toUpperCase(),
               title: snpc.name,
               subtitle: 'Nueva Misión: El Condensador de Cuarzo [Q]',
               paragraphs: [
-                '«Bienvenido al Taller Analógico. Aquí ensamblábamos máquinas enteras sin microprocesadores, solo con ingenio y compuertas TTL.»',
+                '«Con el generador del Sector 03 en marcha, puedo volver a mis osciloscopios. Aquí ensamblábamos máquinas enteras sin microprocesadores, solo con ingenio y compuertas TTL.»',
                 '«Mi fuente principal perdió estabilidad. Si encuentras un Condensador de Cuarzo Puro en algún cofre de las Cavernas del Código al noroeste, te forjaré un Soldador Lógico.»',
               ],
               hint: 'Revisa tus encargos activos pulsando [Q].',
               accentHex: snpc.palette.glow,
             });
+            return;
           }
+          setActiveDialog({
+            category: snpc.role.toUpperCase(),
+            title: snpc.name,
+            subtitle: 'Generador del Sector 03 en línea',
+            paragraphs: [
+              '«¡Escuchá ese zumbido! El generador volvió a latir y la compuerta del Sector 03 quedó abierta.»',
+              '«La isla te debe una. El camino hacia las ruinas vuelve a estar en tus manos.»',
+            ],
+            hint: 'El Sector 03 está abierto. Podés seguir explorando la isla.',
+            accentHex: '#22c55e',
+          });
           return;
         }
 
@@ -3261,6 +4173,78 @@ export function Origin70sIsland({
         retroAudio.npcBlip(npc.pitch);
         callbacksRef.current.onTalkNpc(npc.id);
 
+        if (npc.id === 'npc-viejo-amigo') {
+          const sonarDelivered =
+            st.allUnlocked ||
+            st.progressState.island70s.narrativeEvents.includes('origen-sonar-entregado') ||
+            st.progressState.rpg.inventoryItems.includes('item-sonar-profundidad') ||
+            st.progressState.rpg.openedChestIds.includes('origen-sonar-friend');
+          if (!sonarDelivered) {
+            retroAudio.shardCollect(4);
+            callbacksRef.current.onOpenChest('origen-sonar-friend', ['item-sonar-profundidad']);
+            callbacksRef.current.onRecordNarrativeEvent?.('origen-sonar-entregado');
+            callbacksRef.current.onRechargePowers?.();
+            setActiveDialog({
+              category: 'CALA DE LLEGADA · GUARDIÁN DE LA CALA',
+              title: 'El Viejo Amigo del Abuelo',
+              subtitle: '«Tu abuelo me encomendó que te lo diera.»',
+              paragraphs: [
+                '«¡Pixel! Justo a tiempo. Soy un viejo amigo de tu abuelo. Desde el temblor no puedo cruzar al otro lado: el puente de la cala se vino abajo y el engranaje que mueve el torno se perdió en la arena de esta playa.»',
+                '«TU ABUELO ME ENCOMENDÓ QUE TE LO DIERA. Dijo que serviría para encontrar objetos ocultos cercanos. Yo no lo entiendo; quizás a ti te sirva.»',
+                'El viejo coloca en tus manos el Emisor de Pulso Sonar. No consume energía ni se agota: la frecuencia responde cada vez que la invocás.',
+              ],
+              hint: 'Equipá Pulso Sonar con [1-4] y emití con [F / Acción] sobre los montículos de arena. Después instalá el Engranaje del Puente en el mecanismo del canal.',
+              accentHex: '#10b981',
+            });
+            return;
+          }
+
+          const hasGear = st.progressState.rpg.inventoryItems.includes('item-engranaje-puente');
+          const laserDone = st.origenGeneratorGateOpen;
+          const generatorDone =
+            st.allUnlocked ||
+            st.progressState.island70s.narrativeEvents.includes('origen-generador-reparado');
+          setActiveDialog({
+            category: 'CALA DE LLEGADA · GUARDIÁN DE LA CALA',
+            title: 'El Viejo Amigo del Abuelo',
+            paragraphs: laserDone
+              ? [
+                  '«El zumbido del generador llega hasta acá, y el láser ya no cruza el bosque. Hacía años que la isla no respiraba así.»',
+                  '«Tu abuelo estaría orgulloso. El Sector 03 vuelve a estar abierto y el camino hacia el castillo queda en tus manos.»',
+                ]
+              : generatorDone
+              ? [
+                  '«Escucho el generador del otro lado del bosque. Hacía años que ese zumbido no recorría la isla.»',
+                  '«Pero el paso sigue cerrado: el láser de seguridad se activó solo con el Reinicio Cero. Hablá con Dylan en el taller; él sabe de esa palanca.»',
+                ]
+              : st.origenBridgeOpen
+              ? [
+                  '«El puente ya está firme. Cruzalo y seguí por el sendero hasta el asentamiento.»',
+                  '«Buscá el taller Retro State TS, junto al bosque. El maestro Kertz conoce el generador mejor que nadie.»',
+                ]
+              : hasGear
+              ? [
+                  '«Ese engranaje es el que faltaba. Instalalo en el mecanismo de la orilla y el puente levadizo bajará por su propio peso.»',
+                  '«La marea no va a esperar para siempre. Andá, Pixel.»',
+                ]
+              : [
+                  '«La marea deja brillos en la arena, pero el engranaje sigue enterrado.»',
+                  '«Usá el Pulso Sonar cerca de los montículos de la cala. No gasta energía: repetilo hasta que la frecuencia marque el lugar exacto.»',
+                ],
+            hint: laserDone
+              ? 'El paso al Sector 03 está abierto. Podés seguir explorando la isla.'
+              : generatorDone
+              ? 'Hablá con Dylan en el taller Retro State TS para reparar la palanca de seguridad.'
+              : st.origenBridgeOpen
+              ? 'Subí al poblado y entrá al taller Retro State TS para hablar con el maestro Kertz.'
+              : hasGear
+              ? 'Instalá el Engranaje del Puente en el mecanismo de la orilla sur del canal.'
+              : 'Emití el Pulso Sonar sobre la arena de la cala para desenterrar el engranaje.',
+            accentHex: '#10b981',
+          });
+          return;
+        }
+
         let paragraphs =
           st.invadersRestored && npc.linesAfterInvaders
             ? npc.linesAfterInvaders
@@ -3648,6 +4632,34 @@ export function Origin70sIsland({
     }
   }, [arrivalMode, onArrivalSequenceFinished, showToast]);
 
+  // Si el jugador recarga en la arena antes de hablar con el amigo, la escena
+  // de llegada vuelve a iniciarse para que la historia no quede a medias.
+  useEffect(() => {
+    if (arrivalMode !== 'standard') return;
+    if (activeAreaRef.current !== 'exterior-70s') return;
+    const st = latestStateRef.current;
+    const delivered =
+      st.allUnlocked ||
+      st.progressState.island70s.narrativeEvents.includes('origen-sonar-entregado') ||
+      st.progressState.rpg.inventoryItems.includes('item-sonar-profundidad') ||
+      st.progressState.rpg.openedChestIds.includes('origen-sonar-friend');
+    if (delivered || st.modalOpen || friendIntroRef.current) return;
+    const px = playerPosBridgeRef.current.x;
+    const py = playerPosBridgeRef.current.y;
+    if (Math.hypot(px - NATAL_SURF_LANDING.x, py - NATAL_SURF_LANDING.y) > 140) return;
+    friendIntroRef.current = {
+      elapsed: 0,
+      phase: 'emerge',
+      x: ORIGEN_FRIEND_HOUSE.spawnX,
+      y: ORIGEN_FRIEND_HOUSE.spawnY,
+      startX: ORIGEN_FRIEND_HOUSE.spawnX,
+      startY: ORIGEN_FRIEND_HOUSE.spawnY,
+      targetX: px + 54,
+      targetY: py + 12,
+    };
+    areaTransitionLockRef.current = true;
+  }, [arrivalMode]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -4000,6 +5012,9 @@ export function Origin70sIsland({
           !isBlockedByVolcanicGuardGate(wx, wy, st.allUnlocked || st.progressState.island70s.talkedNpcIds.includes(VOLCANIC_GUARD_ID)) &&
           !isVolcanicArcadeCabinetBlocked(wx, wy) &&
           !isBreakoutLegendStoneBlocked(wx, wy) &&
+          !isBlockedByOrigenCanal(wx, wy, st.origenBridgeOpen) &&
+          !isBlockedByOrigenGeneratorGate(wx, wy, st.origenGeneratorGateOpen) &&
+          !isBlockedByOrigenFaroGate(wx, wy, st.origenFaroGateOpen) &&
           !isNorthArcadeCabinetBlocked(wx, wy);
         if (walkable) {
           virtualInputRef.current.clickTarget = { x: wx, y: wy };
@@ -4142,6 +5157,54 @@ export function Origin70sIsland({
       const curArea = activeAreaRef.current;
       const flight = vehicleFlightRef.current;
 
+      // Escena de llegada: el amigo cruza la playa desde su casa para avisar
+      // del puente roto y entregar el Pulso Sonar antes de devolver el control.
+      const intro = friendIntroRef.current;
+      if (intro) {
+        intro.elapsed += dt;
+        if (intro.phase === 'emerge') {
+          const t = Math.min(1, intro.elapsed / 0.32);
+          intro.x = intro.startX;
+          intro.y = intro.startY + 12 * t;
+          if (t >= 1) {
+            intro.phase = 'approach';
+            intro.elapsed = 0;
+            intro.startX = intro.x;
+            intro.startY = intro.y;
+          }
+        } else {
+          const dur = 1.55;
+          const t = Math.min(1, intro.elapsed / dur);
+          const e = t * t * (3 - 2 * t);
+          intro.x = intro.startX + (intro.targetX - intro.startX) * e;
+          intro.y = intro.startY + (intro.targetY - intro.startY) * e;
+          if (t >= 1) {
+            friendIntroRef.current = null;
+            areaTransitionLockRef.current = false;
+            player.facingDir = 'right';
+            player.facing = 1;
+            player.walking = false;
+            retroAudio.shardCollect(4);
+            callbacksRef.current.onOpenChest('origen-sonar-friend', ['item-sonar-profundidad']);
+            callbacksRef.current.onRecordNarrativeEvent?.('origen-sonar-entregado');
+            callbacksRef.current.onRechargePowers?.();
+            callbacksRef.current.onSavePosition(player.x, player.y);
+            setActiveDialog({
+              category: 'CALA DE LLEGADA · ENCUENTRO CON EL VIEJO AMIGO',
+              title: '«El puente se quebró con el temblor»',
+              subtitle: 'El amigo del abuelo te entrega el Pulso Sonar',
+              paragraphs: [
+                '«¡Pixel! Justo a tiempo. Soy un viejo amigo de tu abuelo. Desde el temblor no puedo cruzar al otro lado: el puente de la cala se vino abajo y el engranaje que mueve el torno se perdió en la arena de esta playa.»',
+                '«TU ABUELO ME ENCOMENDÓ QUE TE LO DIERA. Dijo que serviría para encontrar objetos ocultos cercanos. Yo no lo entiendo; quizás a ti te sirva.»',
+                'El viejo coloca en tus manos el Emisor de Pulso Sonar. Su frecuencia hace visible lo que la arena y los rincones antiguos esconden.',
+              ],
+              hint: 'Equipá Pulso Sonar con [1-4] y emití con [F / Acción]. No consume energía: podés usarlo siempre. Buscá el Engranaje del Puente bajo la arena.',
+              accentHex: '#10b981',
+            });
+          }
+        }
+      }
+
       const powersState = st.progressState.rpg.powersState;
       if (powersState && st.progressState.rpg.lanternActive && !st.allUnlocked) {
         if (powersState.lanternBattery <= 0.01) {
@@ -4198,7 +5261,10 @@ export function Origin70sIsland({
                 })
               ) &&
               !isBlockedByExteriorBuilding(player.x, player.y) &&
-              !isBlockedByIslandRouteRail(player.x, player.y);
+              !isBlockedByIslandRouteRail(player.x, player.y) &&
+              !isBlockedByOrigenCanal(player.x, player.y, st.origenBridgeOpen) &&
+              !isBlockedByOrigenGeneratorGate(player.x, player.y, st.origenGeneratorGateOpen) &&
+              !isBlockedByOrigenFaroGate(player.x, player.y, st.origenFaroGateOpen);
             if (canLandHere) {
               lastSafeGroundRef.current = { x: player.x, y: player.y };
             } else {
@@ -4260,10 +5326,32 @@ export function Origin70sIsland({
           setFlightStatusText(null);
           retroAudio.portalVictory();
           showToast(
-            '¡Aterrizaje completado en la playa de Pueblo Origen! La Barra de Pong está en Mochila → Objetos: invócala con [F] si tienes combustible.'
+            '¡Aterrizaje completado en el muelle de la cala de Pueblo Origen! La Barra de Pong está en Mochila → Objetos: invócala con [F] si tienes combustible.'
           );
           callbacksRef.current.onSavePosition(player.x, player.y);
           callbacksRef.current.onArrivalSequenceFinished?.();
+          // Al desembarcar por primera vez, el amigo sale de su casa y viene a
+          // interceptar a Pixel con el aviso del puente y el Pulso Sonar.
+          const sonarAlreadyDelivered =
+            st.allUnlocked ||
+            st.progressState.island70s.narrativeEvents.includes('origen-sonar-entregado') ||
+            st.progressState.rpg.inventoryItems.includes('item-sonar-profundidad') ||
+            st.progressState.rpg.openedChestIds.includes('origen-sonar-friend');
+          if (!sonarAlreadyDelivered && !friendIntroRef.current) {
+            friendIntroRef.current = {
+              elapsed: 0,
+              phase: 'emerge',
+              x: ORIGEN_FRIEND_HOUSE.spawnX,
+              y: ORIGEN_FRIEND_HOUSE.spawnY,
+              startX: ORIGEN_FRIEND_HOUSE.spawnX,
+              startY: ORIGEN_FRIEND_HOUSE.spawnY,
+              targetX: player.x + 54,
+              targetY: player.y + 12,
+            };
+            areaTransitionLockRef.current = true;
+            player.facingDir = 'right';
+            player.facing = 1;
+          }
         }
       }
 
@@ -4485,6 +5573,9 @@ export function Origin70sIsland({
               !isBlockedByVolcanicGuardGate(nextX, nextY, volcanicPassageOpen) &&
               !isVolcanicArcadeCabinetBlocked(nextX, nextY) &&
               !isBreakoutLegendStoneBlocked(nextX, nextY) &&
+              !isBlockedByOrigenCanal(nextX, nextY, st.origenBridgeOpen) &&
+              !isBlockedByOrigenGeneratorGate(nextX, nextY, st.origenGeneratorGateOpen) &&
+              !isBlockedByOrigenFaroGate(nextX, nextY, st.origenFaroGateOpen) &&
               !isNorthArcadeCabinetBlocked(nextX, nextY);
             const canX =
               Boolean(isPointWalkableOnIsland(nextX, player.y, walkOpts)) &&
@@ -4493,6 +5584,9 @@ export function Origin70sIsland({
               !isBlockedByVolcanicGuardGate(nextX, player.y, volcanicPassageOpen) &&
               !isVolcanicArcadeCabinetBlocked(nextX, player.y) &&
               !isBreakoutLegendStoneBlocked(nextX, player.y) &&
+              !isBlockedByOrigenCanal(nextX, player.y, st.origenBridgeOpen) &&
+              !isBlockedByOrigenGeneratorGate(nextX, player.y, st.origenGeneratorGateOpen) &&
+              !isBlockedByOrigenFaroGate(nextX, player.y, st.origenFaroGateOpen) &&
               !isNorthArcadeCabinetBlocked(nextX, player.y);
             const canY =
               Boolean(isPointWalkableOnIsland(player.x, nextY, walkOpts)) &&
@@ -4501,6 +5595,9 @@ export function Origin70sIsland({
               !isBlockedByVolcanicGuardGate(player.x, nextY, volcanicPassageOpen) &&
               !isVolcanicArcadeCabinetBlocked(player.x, nextY) &&
               !isBreakoutLegendStoneBlocked(player.x, nextY) &&
+              !isBlockedByOrigenCanal(player.x, nextY, st.origenBridgeOpen) &&
+              !isBlockedByOrigenGeneratorGate(player.x, nextY, st.origenGeneratorGateOpen) &&
+              !isBlockedByOrigenFaroGate(player.x, nextY, st.origenFaroGateOpen) &&
               !isNorthArcadeCabinetBlocked(player.x, nextY);
 
             if (canXY) {
@@ -4758,7 +5855,10 @@ export function Origin70sIsland({
                 kind: 'building-door',
                 id: bldg.id,
                 label: `${bldg.name} · ${bldg.subtitle}`,
-                actionLabel: `Entrar a ${bldg.signText}`,
+                actionLabel:
+                  bldg.id === 'bldg-casa-viejo-amigo'
+                    ? 'Llamar a la Puerta'
+                    : `Entrar a ${bldg.signText}`,
                 x: bldg.doorX,
                 y: bldg.doorY + 6,
                 accentHex: bldg.trimHex,
@@ -4855,6 +5955,69 @@ export function Origin70sIsland({
             },
             106
           );
+
+          // Puerto de la Cala: la Barra de Pong hace las veces de palanca de
+          // navegación y permite volver a la Isla Natal sin perder progreso.
+          const boardReadyForNatal = st.pongRestored || st.allUnlocked;
+          consider(
+            {
+              kind: 'natal-port',
+              id: 'origen-port-natal',
+              label: boardReadyForNatal
+                ? 'Muelle de la Cala · Travesía a Isla Natal'
+                : 'Muelle de la Cala · Amarras sin timón',
+              actionLabel: boardReadyForNatal
+                ? 'Surfear a Isla Natal'
+                : 'Inspeccionar el Muelle',
+              x: NATAL_SURF_LANDING.x + 6,
+              y: NATAL_SURF_LANDING.y + 48,
+              accentHex: '#38bdf8',
+            },
+            86
+          );
+
+          // Compuerta PRIORIDAD CERO del Faro del Reinicio (Sector 11).
+          const hasFaroValve = st.progressState.rpg.inventoryItems.includes(
+            'item-valvula-vacio-abuelo'
+          );
+          consider(
+            {
+              kind: 'origen-faro-gate',
+              id: 'origen-faro-compuerta',
+              label: st.origenFaroGateOpen
+                ? 'Compuerta PRIORIDAD CERO · Abierta'
+                : hasFaroValve
+                  ? 'Compuerta PRIORIDAD CERO · Válvula en mano'
+                  : 'Compuerta PRIORIDAD CERO · Sellada',
+              actionLabel: st.origenFaroGateOpen
+                ? 'Inspeccionar Compuerta'
+                : hasFaroValve
+                  ? 'Instalar Válvula de Vacío'
+                  : 'Examinar Compuerta',
+              x: ORIGEN_FARO_CONSOLE.x,
+              y: ORIGEN_FARO_CONSOLE.y + 6,
+              accentHex: '#7dd3fc',
+            },
+            86
+          );
+
+          // Baliza del Faro del Reinicio, ya dentro del acantilado.
+          if (st.origenFaroGateOpen) {
+            consider(
+              {
+                kind: 'origen-faro-beacon',
+                id: 'origen-faro-baliza',
+                label: st.origenFaroLit
+                  ? 'Baliza del Faro · Encendida'
+                  : 'Baliza del Faro · Apagada',
+                actionLabel: st.origenFaroLit ? 'Contemplar el Mar' : 'Encender Baliza',
+                x: ORIGEN_FARO_BEACON.x,
+                y: ORIGEN_FARO_BEACON.y + 6,
+                accentHex: st.origenFaroLit ? '#fde68a' : '#7dd3fc',
+              },
+              84
+            );
+          }
 
           // Mecanismo averiado reparable con Soldador Lógico
           const mechRepaired = st.progressState.rpg.repairedMechanismIds.includes(
@@ -5180,7 +6343,10 @@ export function Origin70sIsland({
               })
             ) &&
             !isBlockedByExteriorBuilding(player.x, player.y) &&
-            !isBlockedByIslandRouteRail(player.x, player.y);
+            !isBlockedByIslandRouteRail(player.x, player.y) &&
+            !isBlockedByOrigenCanal(player.x, player.y, st.origenBridgeOpen) &&
+            !isBlockedByOrigenGeneratorGate(player.x, player.y, st.origenGeneratorGateOpen) &&
+            !isBlockedByOrigenFaroGate(player.x, player.y, st.origenFaroGateOpen);
           if (groundSafe) lastSafeGroundRef.current = { x: player.x, y: player.y };
         }
         miniMapSyncTimer += dt;
@@ -5288,6 +6454,43 @@ export function Origin70sIsland({
             activeZoneId: activeRect ? activeRect.zoneId : null,
             prompt: st.modalOpen ? null : nearbyPromptRef.current,
             scannerPulse: scannerPulseRef.current,
+            bridgeProgress: bridgeAnimRef.current
+              ? Math.min(
+                  1,
+                  (performance.now() - bridgeAnimRef.current.start) /
+                    bridgeAnimRef.current.duration
+                )
+              : 1,
+            laserShutdownProgress: laserShutdownRef.current
+              ? Math.min(
+                  1,
+                  (performance.now() - laserShutdownRef.current.start) /
+                    laserShutdownRef.current.duration
+                )
+              : 0,
+            laserRepaired:
+              st.allUnlocked ||
+              st.progressState.island70s.narrativeEvents.includes(
+                'origen-laser-controles-reparados'
+              ),
+            faroGateProgress: faroGateAnimRef.current
+              ? Math.min(
+                  1,
+                  (performance.now() - faroGateAnimRef.current.start) /
+                    faroGateAnimRef.current.duration
+                )
+              : st.origenFaroGateOpen
+                ? 1
+                : 0,
+            faroBeaconLit: st.origenFaroLit,
+            npcOverrides: friendIntroRef.current
+              ? {
+                  'npc-viejo-amigo': {
+                    x: friendIntroRef.current.x,
+                    y: friendIntroRef.current.y,
+                  },
+                }
+              : null,
           });
         } finally {
           ctx.restore();
@@ -5863,6 +7066,8 @@ export function Origin70sIsland({
         {ISLAND_WALKABLE_RECTS.map((r) => {
           if (r.requiresCondition === 'south-shortcut' && !southShortcutActive) return null;
           if (r.requiresCondition === 'garganta-bridge' && !glitchTrailCleared) return null;
+          // El Sector 11 sólo aparece en el mapa cuando se abre su compuerta.
+          if (r.zoneId === 'faro-reinicio' && !origenFaroGateOpen) return null;
 
           const colorClass =
             r.surface === 'pier'
@@ -5883,6 +7088,8 @@ export function Origin70sIsland({
                 ? 'bg-[#64748b]'
                 : r.zoneId === 'puerto-islas-perdidas'
               ? 'bg-[#d6bc88]'
+              : r.zoneId === 'faro-reinicio'
+              ? 'bg-[#7dd3fc]'
               : 'bg-[#4ade80]';
 
           return (
@@ -6249,13 +7456,9 @@ export function Origin70sIsland({
                 <span className="pv-slot__status">
                   {!isIslandPowerUnlocked('sonar-pulse', progressState, allUnlocked)
                     ? 'SELLADA'
-                    : !allUnlocked &&
-                      (progressState.rpg.powersState?.scannerEnergy ?? 0) <
-                        SCANNER_PULSE_COST
-                    ? 'SIN ENERGÍA'
                     : sonarActive
                     ? 'ACTIVO'
-                    : 'LISTO'}
+                    : 'ILIMITADO'}
                 </span>
               </span>
             </button>
@@ -6375,6 +7578,31 @@ export function Origin70sIsland({
             </button>
           </div>
         </div>
+      )}
+
+      {laserRepairOpen && (
+        <LaserLeverRepairOverlay
+          onClose={() => setLaserRepairOpen(false)}
+          onComplete={() => {
+            setLaserRepairOpen(false);
+            callbacksRef.current.onRecordNarrativeEvent?.(
+              'origen-laser-controles-reparados'
+            );
+            callbacksRef.current.onUpdateQuest?.('quest-laser-seguridad', 'active');
+            showToast('Contactos soldados · La palanca ya responde.');
+            setActiveDialog({
+              category: 'SECTOR 03 · REPARACIÓN ELECTRÓNICA',
+              title: 'Los Tres Contactos Fríos',
+              subtitle: 'Continuidad restablecida',
+              paragraphs: [
+                'El estaño cierra las tres uniones resquebrajadas. La consola emite un tono estable y la palanca deja de moverse en vacío.',
+                'La orden de apagado ya puede viajar por el mecanismo. Empujá la palanca para que el láser de seguridad se apague por sectores.',
+              ],
+              hint: 'Accioná la palanca de la consola para apagar el láser del Sector 03.',
+              accentHex: '#22c55e',
+            });
+          }}
+        />
       )}
 
       {/* Notificación efímera de hallazgo o vuelo */}

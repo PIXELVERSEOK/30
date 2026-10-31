@@ -158,6 +158,8 @@ export interface WoodenSignSpec {
   lines: string[];
   mapLabel?: string;
   large?: boolean;
+  /** Cabecera tallada sobre el nombre en los carteles de gran formato. */
+  kicker?: string;
 }
 
 export interface TunnelPortalSpec {
@@ -391,6 +393,54 @@ export const RPG_ITEMS: Record<string, RpgItemSpec> = {
     description:
       'Conjunto de tres semiconductores de germanio de 1976 en perfecto estado, obtenidos al completar la desafiante carrera nocturna de Night Driver. Componentes indispensables para revivir los circuitos TTL quemados de la Sala de Los Cuatro Caminos.',
     usageHint: 'Llévaselos al técnico Dylan en Taller RS — Retro State.',
+    usableAction: 'inspect',
+  },
+  'item-transistores-germanio-lago': {
+    id: 'item-transistores-germanio-lago',
+    name: '3 Transistores de Germanio del Lago',
+    category: 'pieza-arcade',
+    categoryLabel: 'COMPONENTE RESCATADO DEL REINICIO',
+    accentHex: '#fb923c',
+    shortCode: 'TR-LAGO',
+    description:
+      'Tres semiconductores de germanio que sobrevivieron al Reinicio Cero dentro de una caja estanca, en la orilla opuesta del lago del bosque. Sus patillas siguen limpias: Dylan puede devolverles la función.',
+    usageHint: 'Llévaselos al técnico Dylan en el Taller Retro State TS del bosque.',
+    usableAction: 'inspect',
+  },
+  'item-soldador-estaño': {
+    id: 'item-soldador-estaño',
+    name: 'Soldador de Estaño de Dylan',
+    category: 'herramienta',
+    categoryLabel: 'HERRAMIENTA DE REPARACIÓN',
+    accentHex: '#f97316',
+    shortCode: 'SLD-SN',
+    description:
+      'Un soldador de lápiz con punta de cobre y carrete de estaño que Dylan afina a mano. Sirve para unir contactos electrónicos partidos sin quemar las pistas del circuito.',
+    usageHint: 'En la consola de la palanca de seguridad del Sector 03, pulsá [E] para identificar los contactos fríos y soldarlos.',
+    usableAction: 'inspect',
+  },
+  'item-valvula-vacio-abuelo': {
+    id: 'item-valvula-vacio-abuelo',
+    name: 'Válvula de Vacío del Abuelo (1969)',
+    category: 'pieza-arcade',
+    categoryLabel: 'COMPONENTE DE LA CASA NATAL',
+    accentHex: '#7dd3fc',
+    shortCode: 'VLV-69',
+    description:
+      'Válvula de vacío de repuesto que el abuelo guardaba en el compartimento de latón detrás de la radio de la cabaña. Alimentaba los circuitos de sincronía de las compuertas antiguas de la costa.',
+    usageHint: 'Instalala en la consola de la compuerta PRIORIDAD CERO del acantilado oriental de la Costa de las Máquinas.',
+    usableAction: 'inspect',
+  },
+  'item-lente-fresnel': {
+    id: 'item-lente-fresnel',
+    name: 'Lente de Fresnel del Faro',
+    category: 'reliquia',
+    categoryLabel: 'MEMORIA DE LA COSTA',
+    accentHex: '#fde68a',
+    shortCode: 'LNT-FR',
+    description:
+      'Anillo de cristal tallado que dirigía la luz de la baliza del Faro del Reinicio. Una de sus caras conserva la marca de la onda expansiva del 23 de octubre de 2026.',
+    usageHint: 'Reliquia de exploración: conservala en la Mochila como memoria del Faro.',
     usableAction: 'inspect',
   },
   'item-bitacora-cero': {
@@ -650,6 +700,78 @@ export const RPG_ITEMS: Record<string, RpgItemSpec> = {
     usableAction: 'inspect',
     grantsAbility: 'pong-hoverboard',
   },
+  'item-palanca-pong': {
+    id: 'item-palanca-pong',
+    name: 'Palanca de Pong (1972)',
+    category: 'pieza-arcade',
+    categoryLabel: 'MECANISMO DE ENCENDIDO',
+    accentHex: '#f59e0b',
+    shortCode: 'PLC-72',
+    description:
+      'Palanca de hierro forjado que el abuelo de Pixel guardó dentro del cofre familiar. Encaja en la ranura del gabinete de Pong y transmite el pulso necesario para despertar el tubo.',
+    usageHint: 'Llévala al gabinete de la arboleda, en la Isla Natal, e instálala para encender Pong.',
+    usableAction: 'inspect',
+  },
+  'item-carta-abuelo': {
+    id: 'item-carta-abuelo',
+    name: 'Carta del Abuelo',
+    category: 'cinta-memoria',
+    categoryLabel: 'TESTIMONIO DEL REINICIO CERO',
+    accentHex: '#fde68a',
+    shortCode: 'CRT-72',
+    description:
+      'Carta manuscrita encontrada dentro del cofre, bajo el retrato familiar. Explica qué fue el Reinicio Cero, por qué el viejo Pong sobrevivió y cuál es la misión de Pixel.',
+    usageHint: 'Consérvala. La carta completa se lee al abrir el cofre; en el inventario queda como testimonio.',
+    usableAction: 'inspect',
+  },
+  'item-foto-abuelo': {
+    id: 'item-foto-abuelo',
+    name: 'Fotografía del Abuelo',
+    category: 'reliquia',
+    categoryLabel: 'MEMORIA DE FAMILIA',
+    accentHex: '#cbd5e1',
+    shortCode: 'FOT-72',
+    description:
+      'Fotografía antigua del abuelo frente a un gabinete de Pong recién traído a la isla. En el reverso anotó una sola frase: «Lo que se juega, se recuerda».',
+    usageHint: 'Una reliquia personal de Pixel. Mantiene viva la memoria de quien le enseñó a jugar.',
+    usableAction: 'inspect',
+  },
+  'item-engranaje-puente': {
+    id: 'item-engranaje-puente',
+    name: 'Engranaje del Puente de la Cala',
+    category: 'pieza-arcade',
+    categoryLabel: 'PIEZA DE PUENTE',
+    accentHex: '#f59e0b',
+    shortCode: 'ENG-01',
+    description:
+      'Rueda dentada de bronce sepultada en la arena de la cala. Encaja en el torno del puente levadizo y transmite el giro necesario para desplegar las vigas sobre el canal.',
+    usageHint: 'Llévala al mecanismo de la orilla sur y montala para abrir el paso hacia el asentamiento.',
+    usableAction: 'inspect',
+  },
+  'item-brujula-mareas': {
+    id: 'item-brujula-mareas',
+    name: 'Brújula de Mareas',
+    category: 'reliquia',
+    categoryLabel: 'OBJETO OPCIONAL DE LA CALA',
+    accentHex: '#38bdf8',
+    shortCode: 'BRJ-01',
+    description:
+      'Pequeña brújula de latón que el mar devolvió a la arena. Su aguja no señala el norte: oscila con la memoria de las corrientes que trajeron a Pixel hasta la costa.',
+    usageHint: 'Conservala en la Mochila como recuerdo de tu llegada a la Isla del Origen.',
+    usableAction: 'inspect',
+  },
+  'item-pieza-generador': {
+    id: 'item-pieza-generador',
+    name: 'Pieza del Generador Retro State',
+    category: 'pieza-arcade',
+    categoryLabel: 'REPUESTO INDUSTRIAL',
+    accentHex: '#22c55e',
+    shortCode: 'GEN-79',
+    description:
+      'Conmutador de potencia sellado en cobre y baquelita, recuperado tras superar el Cruce de Circuitos en el bosque. Es la pieza exacta que falta para reparar el generador del taller.',
+    usageHint: 'Llévala al Maestro Kertz en Retro State TS y después montala en el generador.',
+    usableAction: 'inspect',
+  },
   'item-espada-cambiante': {
     id: 'item-espada-cambiante',
     name: 'Espada Cambiante de Breakout (1976)',
@@ -676,13 +798,13 @@ export const RPG_ITEMS: Record<string, RpgItemSpec> = {
   },
   'item-sonar-profundidad': {
     id: 'item-sonar-profundidad',
-    name: 'Emisor de Pulso Sonar (1976)',
+    name: 'Emisor de Pulso Sonar',
     category: 'herramienta',
     categoryLabel: 'HABILIDAD PRINCIPAL',
     accentHex: '#10b981',
-    shortCode: 'SNR-76',
+    shortCode: 'SNR-01',
     description:
-      'Dispositivo de periscopio de Sea Wolf (1976) que emite ondas sonoras acopladas. Revela pasadizos ocultos, mecanismos sumergidos y cofres invisibles.',
+      'Dispositivo de pulso sónico que el viejo amigo del abuelo conservaba en la cala. Su frecuencia revela objetos enterrados en la arena, pasadizos ocultos y mecanismos antiguos.',
     usageHint: 'Selecciona Pulso Sonar con [1-4] y emite ondas con [F / Acción].',
     usableAction: 'inspect',
   },
@@ -970,6 +1092,161 @@ export const RPG_QUESTS: RpgQuestSpec[] = [
     rewardItemIds: ['item-lampara-fosforo'],
   },
   {
+    id: 'quest-laser-seguridad',
+    code: 'MIS-09',
+    title: 'La Palanca y el Láser Dormido',
+    giverName: 'Dylan · Taller Retro State TS',
+    decadeTag: 'BOSQUE DE LAS SEÑALES · PASO AL SECTOR 03',
+    accentHex: '#fb923c',
+    summary:
+      'El láser que sella el paso al Sector 03 se activó solo como sistema de seguridad después del Reinicio Cero. Sus haces no son un enemigo: son una alarma. La palanca que debería apagarlos perdió sus contactos electrónicos, y Dylan necesita germanio y estaño para devolverle la voz.',
+    steps: [
+      {
+        label: 'Escuchar a Dylan en el Taller Retro State TS',
+        isDone: (st, all) =>
+          all ||
+          st.island70s.talkedNpcIds.includes('npc-dylan-tecnico') ||
+          st.rpg.questStates['quest-laser-seguridad'] !== undefined,
+      },
+      {
+        label: 'Superar la memoria anfibia del gabinete «Cruce de Circuitos»',
+        isDone: (st, all) => all || Boolean(st.games['frogger']?.memoryUnlocked),
+      },
+      {
+        label: 'Recuperar los transistores de germanio al otro lado del lago',
+        isDone: (st, all) =>
+          all ||
+          st.rpg.inventoryItems.includes('item-transistores-germanio-lago') ||
+          st.island70s.narrativeEvents.includes('origen-transistores-lago-entregados'),
+      },
+      {
+        label: 'Entregar el germanio a Dylan y recibir el soldador de estaño',
+        isDone: (st, all) =>
+          all || st.island70s.narrativeEvents.includes('origen-soldador-entregado'),
+      },
+      {
+        label: 'Identificar y soldar los contactos fríos de la palanca',
+        isDone: (st, all) =>
+          all || st.island70s.narrativeEvents.includes('origen-laser-controles-reparados'),
+      },
+      {
+        label: 'Accionar la palanca y apagar el láser de seguridad',
+        isDone: (st, all) =>
+          all || st.island70s.narrativeEvents.includes('origen-laser-desactivado'),
+      },
+    ],
+    rewardSummary: 'Paso al Sector 03 abierto + 3 transistores recuperados',
+    rewardItemIds: [],
+  },
+  {
+    id: 'quest-instalacion-oculta',
+    code: 'MIS-10',
+    title: 'Lo que el Láser Protegía',
+    giverName: 'Instalación de Seguridad · Sector 03',
+    decadeTag: 'SECTOR 03 · RESTOS BAJO LA HIEDRA',
+    accentHex: '#67e8f9',
+    summary:
+      'Detrás del paso láser, una instalación antigua duerme cubierta de vegetación. Sus conductos están mudos y un panel incompleto sugiere que el sistema de seguridad no protegía la entrada, sino algo que aún espera más adelante.',
+    steps: [
+      {
+        label: 'Cruzar el paso láser hacia el Sector 03',
+        isDone: (st, all) =>
+          all || st.island70s.narrativeEvents.includes('origen-laser-desactivado'),
+      },
+      {
+        label: 'Investigar la instalación cubierta por la vegetación',
+        isDone: (st, all) =>
+          all || st.island70s.narrativeEvents.includes('origen-instalacion-investigada'),
+      },
+      {
+        label: 'Descifrar el panel de control dañado y su registro incompleto',
+        isDone: (st, all) =>
+          all || st.island70s.narrativeEvents.includes('origen-panel-instalacion-leido'),
+      },
+    ],
+    rewardSummary: 'Nueva pista: una segunda compuerta marcada como PRIORIDAD CERO',
+    rewardItemIds: [],
+  },
+  {
+    id: 'quest-faro-reinicio',
+    code: 'MIS-11',
+    title: 'La Compuerta PRIORIDAD CERO',
+    giverName: 'Compuerta del Faro · Costa de las Máquinas',
+    decadeTag: 'ACANTILADO ORIENTAL · SECTOR 11',
+    accentHex: '#7dd3fc',
+    summary:
+      'El registro de la instalación del Sector 03 señala una segunda compuerta PRIORIDAD CERO en el acantilado oriental. La onda expansiva del Reinicio Cero partió su circuito de sincronía. El abuelo guardaba una válvula de vacío de repuesto en la radio de la cabaña de Isla Natal: con ella, el Faro del Reinicio puede volver a abrirse.',
+    steps: [
+      {
+        label: 'Inspeccionar la compuerta sellada del Faro en la Costa de las Máquinas',
+        isDone: (st, all) => all || st.rpg.questStates['quest-faro-reinicio'] !== undefined,
+      },
+      {
+        label: 'Volver a Isla Natal y recuperar la válvula de la radio del abuelo',
+        isDone: (st, all) =>
+          all ||
+          st.rpg.inventoryItems.includes('item-valvula-vacio-abuelo') ||
+          st.island70s.narrativeEvents.includes('isla-natal-valvula-entregada'),
+      },
+      {
+        label: 'Instalar la válvula y abrir la compuerta PRIORIDAD CERO',
+        isDone: (st, all) =>
+          all || st.island70s.narrativeEvents.includes('origen-faro-abierto'),
+      },
+      {
+        label: 'Ascender al Faro del Reinicio y encender su baliza',
+        isDone: (st, all) =>
+          all || st.island70s.narrativeEvents.includes('origen-faro-encendido'),
+      },
+    ],
+    rewardSummary: 'Acceso al Faro del Reinicio + Lente de Fresnel en la terraza de la baliza',
+    rewardItemIds: [],
+  },
+  {
+    id: 'quest-generador-retrostate',
+    code: 'MIS-00',
+    title: 'La Pieza del Generador',
+    giverName: 'Maestro Kertz · Retro State TS',
+    decadeTag: 'BOSQUE DE LAS SEÑALES · SECTOR 03',
+    accentHex: '#22c55e',
+    summary:
+      'El generador que alimenta el taller y sus máquinas está roto. Kertz necesita una pieza de repuesto custodiada por el Cruce de Circuitos, un prototipo arcade escondido en el bosque. Supera el desafío, entrega la pieza y devuelve la energía al taller.',
+    steps: [
+      {
+        label: 'Escuchar al Maestro Kertz en Retro State TS',
+        isDone: (st, all) =>
+          all ||
+          st.island70s.talkedNpcIds.includes('npc-maestro-kertz') ||
+          st.rpg.questStates['quest-generador-retrostate'] !== undefined,
+      },
+      {
+        label: 'Encontrar el gabinete «Cruce de Circuitos» en el bosque',
+        isDone: (st, all) =>
+          all || Boolean(st.games['frogger']?.started) || Boolean(st.games['frogger']?.completed),
+      },
+      {
+        label: 'Superar el Cruce de Circuitos y obtener la pieza del generador',
+        isDone: (st, all) =>
+          all ||
+          Boolean(st.games['frogger']?.memoryUnlocked) ||
+          st.rpg.inventoryItems.includes('item-pieza-generador') ||
+          st.island70s.narrativeEvents.includes('origen-pieza-entregada'),
+      },
+      {
+        label: 'Entregar la pieza al Maestro Kertz',
+        isDone: (st, all) =>
+          all || st.island70s.narrativeEvents.includes('origen-pieza-entregada'),
+      },
+      {
+        label: 'Montar la pieza en el generador y estabilizar el taller',
+        isDone: (st, all) =>
+          all || st.island70s.narrativeEvents.includes('origen-generador-reparado'),
+      },
+    ],
+    rewardSummary: 'Generador reparado + Taller Retro State TS energizado',
+    rewardItemIds: [],
+  },
+  {
     id: 'quest-taller-ttl',
     code: 'MIS-02',
     title: 'El Artesano del Bosque de los Secretos',
@@ -1244,9 +1521,31 @@ export const ISLAND_70S_BUILDINGS: ExteriorBuildingSpec[] = [
     returnExteriorY: 1738,
   },
   {
+    id: 'bldg-casa-viejo-amigo',
+    name: 'Casa del Viejo Amigo · Guardián de la Cala',
+    subtitle: 'Cala de llegada · Hogar del amigo del abuelo, junto al muelle',
+    archStyle: 'cottage-archive',
+    x: 620,
+    y: 2088,
+    w: 144,
+    h: 88,
+    roofHex: '#8f6a3c',
+    roofShadeHex: '#5c4020',
+    wallHex: '#c7b493',
+    trimHex: '#6b4a26',
+    signText: 'CASA',
+    doorX: 692,
+    doorY: 2174,
+    targetArea: 'interior-centro-historia',
+    targetSpawnX: 360,
+    targetSpawnY: 430,
+    returnExteriorX: 692,
+    returnExteriorY: 2190,
+  },
+  {
     id: 'bldg-taller-alcorn',
-    name: 'Taller Analógico de las Señales',
-    subtitle: 'Bosque de las Señales · Osciloscopios, antena rotatoria y pared falsa',
+    name: 'Retro State TS · Taller de Pixel',
+    subtitle: 'Bosque de las Señales · Generador, osciloscopios y el cartucho del Cruce de Circuitos',
     archStyle: 'forest-workshop',
     x: 944,
     y: 936,
@@ -1256,7 +1555,7 @@ export const ISLAND_70S_BUILDINGS: ExteriorBuildingSpec[] = [
     roofShadeHex: '#7a5218',
     wallHex: '#c4b49a',
     trimHex: '#5c3a1e',
-    signText: 'TALLER TTL',
+    signText: 'RETRO STATE TS',
     doorX: 1018,
     doorY: 1026,
     targetArea: 'interior-taller-alcorn',
@@ -1606,6 +1905,20 @@ export const ISLAND_WOODEN_SIGNS: WoodenSignSpec[] = [
     large: false,
   },
   {
+    id: 'sign-id-faro',
+    label: 'Leer cartel',
+    x: 3628,
+    y: 1476,
+    zoneTitle: 'EL FARO DEL REINICIO',
+    lines: [
+      'Sector 11',
+      'La baliza que vigilaba el archipiélago antes del Reinicio Cero.',
+    ],
+    mapLabel: 'FARO DEL REINICIO',
+    large: true,
+    kicker: 'SECTOR 11 · ACANTILADO',
+  },
+  {
     id: 'sign-cuatro-caminos-arcade',
     label: 'Cartel de Madera · Sala de Los Cuatro Caminos',
     x: 1868,
@@ -1777,6 +2090,24 @@ export const RPG_CHESTS: RpgChestSpec[] = [
     rewardItemIds: ['item-mapa-secreto-isla'],
   },
   {
+    id: 'chest-lago-germanio',
+    areaId: 'exterior-70s',
+    label: 'Caja Estanca de la Otra Orilla',
+    x: 720,
+    y: 1458,
+    accentHex: '#fb923c',
+    rewardItemIds: ['item-transistores-germanio-lago'],
+  },
+  {
+    id: 'chest-faro-lente',
+    areaId: 'exterior-70s',
+    label: 'Arcón de la Terraza del Faro',
+    x: 4300,
+    y: 1720,
+    accentHex: '#fde68a',
+    rewardItemIds: ['item-lente-fresnel'],
+  },
+  {
     id: 'chest-caverna-cuarzo',
     areaId: 'exterior-70s',
     label: 'Cofre de Cuarzo Subterráneo',
@@ -1916,6 +2247,101 @@ export const RPG_CHESTS: RpgChestSpec[] = [
    5. OBJETOS EXAMINABLES, SÍMBOLOS DEL PULSO, PAREDES FALSAS Y SECRETOS
    ============================================================================ */
 export const RPG_EXAMINABLES: RpgExaminableSpec[] = [
+  // --- CALA DE LLEGADA · PUENTE DEL ASENTAMIENTO ---
+  {
+    id: 'exam-puente-cala',
+    areaId: 'exterior-70s',
+    label: 'Mecanismo del Puente de la Cala',
+    actionLabel: 'Examinar Mecanismo',
+    x: 624,
+    y: 1912,
+    accentHex: '#f59e0b',
+    category: 'COSTA DE LLEGADA · PUENTE LEVADIZO',
+    paragraphs: [
+      'El torno del puente gira en vacío: falta la rueda dentada que transmite la fuerza al mecanismo de las vigas. Sin ella, el canal que separa la playa del asentamiento permanece infranqueable.',
+      'El viejo amigo de la familia asegura que el engranaje quedó enterrado en la arena cuando el temblor quebró el puente.',
+    ],
+    hint: 'Usa el Pulso Sonar (no consume energía) cerca de la orilla para desenterrar el engranaje y montalo aquí.',
+  },
+  // --- TALLER RETRO STATE TS · GENERADOR ---
+  {
+    id: 'exam-generador-retrostate',
+    areaId: 'interior-taller-alcorn',
+    label: 'Generador del Sector 03',
+    actionLabel: 'Examinar Generador',
+    x: 380,
+    y: 188,
+    accentHex: '#22c55e',
+    category: 'RETRO STATE TS · SALA DE MÁQUINAS',
+    paragraphs: [
+      'Un generador de hierro y cobre alimenta las líneas del taller: lámparas, tornos y las placas de los gabinetes.',
+      'El conmutador de potencia está reventado. Sin la pieza de repuesto el taller seguirá a oscuras, aunque la compuerta del bosque responde a la palanca de seguridad.',
+    ],
+    hint: 'Habla con el Maestro Kertz para conseguir la pieza que falta.',
+  },
+  // --- PASO AL SECTOR 03 · PALANCA DEL LÁSER DE SEGURIDAD ---
+  {
+    id: 'exam-palanca-laser',
+    areaId: 'exterior-70s',
+    label: 'Consola de la Palanca de Seguridad',
+    actionLabel: 'Examinar Consola',
+    x: 1398,
+    y: 1312,
+    accentHex: '#f97316',
+    category: 'SECTOR 03 · SISTEMA DE SEGURIDAD AUTOMÁTICO',
+    paragraphs: [
+      'Una palanca de bronce emerge de una consola de baquelita. Los indicadores siguen en rojo: el láser de seguridad continúa alimentado.',
+      'La orden de apagado existe, pero el mecanismo electrónico que la transmite ya no responde. El Reinicio Cero fundió parte de sus contactos.',
+    ],
+    hint: 'Dylan, el técnico del Taller Retro State TS, sabe cómo devolverle la voz a esta palanca.',
+  },
+  // --- SECTOR 03 · RESTOS DE LA INSTALACIÓN QUE EL LÁSER PROTEGÍA ---
+  {
+    id: 'exam-instalacion-seguridad',
+    areaId: 'exterior-70s',
+    label: 'Instalación Cubierta por la Vegetación',
+    actionLabel: 'Investigar Instalación',
+    x: 1524,
+    y: 1360,
+    accentHex: '#67e8f9',
+    category: 'SECTOR 03 · RESTOS DE UNA INSTALACIÓN ANTIGUA',
+    paragraphs: [
+      'Bajo la hiedra asoman placas de hormigón, antenas dobladas y conductos de cobre que ya no zumban. No es una ruina cualquiera: alguien construyó este lugar para vigilar el paso.',
+      'Las marcas del Reinicio Cero recorren los muros como grietas de calor. El sistema láser no era el único mecanismo afectado: otros conductos también quedaron mudos.',
+    ],
+    hint: 'Hay un panel de control semienterrado junto a los restos. Examinalo.',
+  },
+  {
+    id: 'exam-panel-instalacion',
+    areaId: 'exterior-70s',
+    label: 'Panel de Control Semienterrado',
+    actionLabel: 'Leer Panel Dañado',
+    x: 1576,
+    y: 1376,
+    accentHex: '#22d3ee',
+    category: 'SECTOR 03 · REGISTRO INCOMPLETO DEL SISTEMA',
+    paragraphs: [
+      'La pantalla del panel parpadea con datos incompletos. Reconoce conexiones con el acueducto del Claro de Pong y con el observatorio del Cronoscopio, pero todas figuran sin respuesta desde el Reinicio Cero.',
+      'En el borde inferior queda una silueta borroneada: una segunda compuerta, más al norte, marcada como PRIORIDAD CERO. El sistema de seguridad no protegía este paso: protegía lo que hay detrás de él.',
+    ],
+    hint: 'Nuevo objetivo: investigar la instalación y descubrir qué protegía realmente el sistema de seguridad.',
+  },
+  // --- BOSQUE · GABINETE DEL DESAFÍO ---
+  {
+    id: 'exam-gabinete-circuito-anfibio',
+    areaId: 'exterior-70s',
+    label: 'Gabinete «Cruce de Circuitos» (1979)',
+    actionLabel: 'Inspeccionar Gabinete',
+    x: 1148,
+    y: 1128,
+    accentHex: '#22c55e',
+    category: 'BOSQUE DE LAS SEÑALES · PROTOTIPO ARCADE',
+    paragraphs: [
+      'Un gabinete de madera oscura con una pantalla dividida en canales, cables y tres puertos de llegada. El rótulo pintado a mano dice «CRUCE DE CIRCUITOS · 1979».',
+      'El Maestro Kertz guarda el cartucho de prueba. Si lo autoriza, el desafío puede devolver la pieza que necesita el generador.',
+    ],
+    hint: 'Habla con Kertz en Retro State TS para activar el desafío.',
+  },
   // --- CUEVA GLITCH RPG EXAMINABLES ---
   {
     id: 'exam-glitch-reflector',
@@ -2622,6 +3048,23 @@ export const RPG_EXAMINABLES: RpgExaminableSpec[] = [
       '¡La legendaria nave canónica de 1978! Sus turbinas emiten un zumbido cósmico estable y su cabina brilla con fósforo verde. Requiere la Llave Maestra del Hangar entregada por Donkey Kong para despegar rumbo a la Isla de los 80.',
     ],
   },
+  // --- FARO DEL REINICIO · ARCHIVO DE LA BALIZA (SECTOR 11) ---
+  {
+    id: 'exam-faro-registro-ondas',
+    areaId: 'exterior-70s',
+    label: 'Registro de Ondas del Faro',
+    actionLabel: 'Leer Registro',
+    x: 4048,
+    y: 1988,
+    accentHex: '#7dd3fc',
+    category: 'FARO DEL REINICIO · ARCHIVO DE LA BALIZA',
+    paragraphs: [
+      'Una placa de cobre registra las lecturas de la baliza: durante décadas marcó el pulso del archipiélago con una luz azul que ninguna tormenta apagaba.',
+      'El 23 de octubre de 2026 el registro se corta de golpe. La última línea anota una onda expansiva de origen desconocido y un temblor que partió la compuerta PRIORIDAD CERO del acantilado.',
+      'Al pie, con letra del abuelo: «La radio guarda una válvula de repuesto. Las compuertas viejas la reconocen.»',
+    ],
+    hint: 'La terraza oriental conserva la baliza. La compuerta de acceso responde a una válvula de vacío.',
+  },
 ];
 
 /* ============================================================================
@@ -3078,9 +3521,9 @@ export const SUB_AREAS: Record<Exclude<RpgAreaId, 'exterior-70s'>, SubAreaSpec> 
 
   'interior-taller-alcorn': {
     id: 'interior-taller-alcorn',
-    numberLabel: 'BOSQUE DE LOS SECRETOS · INTERIOR',
-    name: 'Taller del Bosque de los Secretos',
-    subtitle: 'Mesas de madera, osciloscopios y una misteriosa grieta en el muro norte',
+    numberLabel: 'BOSQUE DE LOS SECRETOS · RETRO STATE TS',
+    name: 'Taller Retro State TS',
+    subtitle: 'Mesas de madera, osciloscopios, el generador del Sector 03 y una grieta en el muro norte',
     accentHex: '#8cd96c',
     floorHex: '#253528',
     floorGridHex: 'rgba(140, 217, 108, 0.1)',

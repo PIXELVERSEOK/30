@@ -30,7 +30,8 @@ export type IslandZoneId =
   | 'cavernas-codigo'
   | 'cumbre-arquitecto'
   | 'cumbre-septentrional'
-  | 'puerto-islas-perdidas';
+  | 'puerto-islas-perdidas'
+  | 'faro-reinicio';
 
 export interface WalkableRect {
   id: string;
@@ -236,6 +237,18 @@ export const ISLAND_ZONES: Record<IslandZoneId, IslandZoneMeta> = {
     ambientTint: 'rgba(36, 123, 160, 0.05)',
     mapCenter: { x: 3280, y: 1180 },
   },
+  'faro-reinicio': {
+    id: 'faro-reinicio',
+    numberLabel: 'SECTOR 11 · FARO DEL REINICIO',
+    macroRegionTitle: 'EL ACANTILADO DEL FARO',
+    name: 'El Faro del Reinicio',
+    subtitle:
+      'Acantilado costero sellado tras la onda expansiva: la baliza que vigilaba el archipiélago, su registro de ondas y el mirador sobre el mar del tiempo',
+    biome: 'coast',
+    accentHex: '#7dd3fc',
+    ambientTint: 'rgba(125, 211, 252, 0.05)',
+    mapCenter: { x: 3968, y: 1670 },
+  },
 };
 
 /**
@@ -305,7 +318,139 @@ export const ISLAND_WALKABLE_RECTS: WalkableRect[] = [
   { id: 'fortaleza-to-puerto', x: 2960, y: 896, w: 240, h: 224, zoneId: 'puerto-islas-perdidas', surface: 'sand' },
   { id: 'puerto-pier-main', x: 2992, y: 1056, w: 528, h: 336, zoneId: 'puerto-islas-perdidas', surface: 'pier' },
   { id: 'costa-ruinas-tiempo', x: 2992, y: 1360, w: 400, h: 240, zoneId: 'puerto-islas-perdidas', surface: 'sand' },
+
+  // SECTOR 11: El Faro del Reinicio (acantilado tras la compuerta PRIORIDAD CERO)
+  { id: 'faro-access', x: 3392, y: 1440, w: 192, h: 160, zoneId: 'faro-reinicio', surface: 'stone' },
+  { id: 'faro-plateau', x: 3584, y: 1376, w: 688, h: 560, zoneId: 'faro-reinicio', surface: 'stone' },
+  { id: 'faro-south-path', x: 3824, y: 1936, w: 304, h: 224, zoneId: 'faro-reinicio', surface: 'grass' },
+  { id: 'faro-beacon-terrace', x: 4208, y: 1504, w: 264, h: 288, zoneId: 'faro-reinicio', surface: 'crystal' },
 ];
+
+/**
+ * Canal de la cala de llegada: separa la playa (sur) del asentamiento (norte).
+ * El puente levadizo solo se despliega al instalar el engranaje del mecanismo.
+ */
+export const ORIGEN_CALA_CANAL = {
+  x1: 224,
+  x2: 1080,
+  y1: 1872,
+  y2: 1900,
+  // El paso útil del puente incluye el ancho completo de la pasarela: antes
+  // terminaba justo donde está el torno y el jugador quedaba frenado contra
+  // el borde del canal al intentar cruzar en línea recta.
+  bridgeX1: 408,
+  bridgeX2: 600,
+  mechanism: { x: 624, y: 1912 },
+} as const;
+
+/** Casa del viejo amigo en la cala de llegada. La puerta mira al sur. */
+export const ORIGEN_FRIEND_HOUSE = {
+  x: 620,
+  y: 2088,
+  w: 144,
+  h: 88,
+  doorX: 692,
+  doorY: 2174,
+  /** Punto exacto del umbral desde donde sale el amigo. */
+  spawnX: 692,
+  spawnY: 2182,
+} as const;
+
+export function isBlockedByOrigenCanal(x: number, y: number, bridgeOpen: boolean): boolean {
+  if (x < ORIGEN_CALA_CANAL.x1 || x > ORIGEN_CALA_CANAL.x2) return false;
+  if (y < ORIGEN_CALA_CANAL.y1 || y > ORIGEN_CALA_CANAL.y2) return false;
+  if (bridgeOpen && x >= ORIGEN_CALA_CANAL.bridgeX1 && x <= ORIGEN_CALA_CANAL.bridgeX2) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Compuerta de energía entre el Bosque de las Señales (Sector 02) y la Plaza
+ * del Primer Pulso (Sector 03). La abre la palanca de seguridad del Sector 03
+ * cuando el láser queda fuera de línea; reparar el generador no la mueve.
+ */
+export const ORIGEN_SECTOR_GATE = {
+  x1: 1424,
+  x2: 1466,
+  y1: 1150,
+  y2: 1470,
+} as const;
+
+export function isBlockedByOrigenGeneratorGate(
+  x: number,
+  y: number,
+  gateOpen: boolean
+): boolean {
+  if (gateOpen) return false;
+  return (
+    x >= ORIGEN_SECTOR_GATE.x1 &&
+    x <= ORIGEN_SECTOR_GATE.x2 &&
+    y >= ORIGEN_SECTOR_GATE.y1 &&
+    y <= ORIGEN_SECTOR_GATE.y2
+  );
+}
+
+/**
+ * Compuerta PRIORIDAD CERO del Faro del Reinicio, en el acantilado oriental de
+ * la Costa de las Máquinas. La onda expansiva del Reinicio Cero partió su
+ * circuito de sincronía: sólo vuelve a responder al instalar la válvula de
+ * vacío que el abuelo guardaba en la radio de la cabaña de Isla Natal.
+ */
+export const ORIGEN_FARO_GATE = {
+  x1: 3376,
+  x2: 3408,
+  y1: 1436,
+  y2: 1612,
+} as const;
+
+export function isBlockedByOrigenFaroGate(
+  x: number,
+  y: number,
+  gateOpen: boolean
+): boolean {
+  if (gateOpen) return false;
+  return (
+    x >= ORIGEN_FARO_GATE.x1 &&
+    x <= ORIGEN_FARO_GATE.x2 &&
+    y >= ORIGEN_FARO_GATE.y1 &&
+    y <= ORIGEN_FARO_GATE.y2
+  );
+}
+
+/** Consola exterior de la compuerta del Faro, accesible desde la costa. */
+export const ORIGEN_FARO_CONSOLE = { x: 3344, y: 1528 } as const;
+
+/** Baliza del Faro del Reinicio, en la terraza este del acantilado. */
+export const ORIGEN_FARO_BEACON = { x: 4428, y: 1640 } as const;
+
+/**
+ * Lago del Bosque de las Señales. No es decorativo: corta el paso directo
+ * hacia la orilla opuesta, donde quedaron los transistores de germanio del
+ * Reinicio Cero. El jugador debe rodearlo por el este.
+ */
+export const ORIGEN_FOREST_LAKE = {
+  x1: 560,
+  x2: 840,
+  y1: 1264,
+  y2: 1424,
+  islet: { x: 620, y: 1360, r: 26 },
+} as const;
+
+export function isInsideOrigenForestLake(x: number, y: number): boolean {
+  return (
+    x > ORIGEN_FOREST_LAKE.x1 &&
+    x < ORIGEN_FOREST_LAKE.x2 &&
+    y > ORIGEN_FOREST_LAKE.y1 &&
+    y < ORIGEN_FOREST_LAKE.y2
+  );
+}
+
+/** Consola de la palanca que corta el láser de seguridad del Sector 03. */
+export const ORIGEN_LASER_CONSOLE = { x: 1398, y: 1312 } as const;
+
+/** Restos de la instalación que el sistema láser protegía, tras la compuerta. */
+export const ORIGEN_SECURITY_RUINS = { x: 1524, y: 1388 } as const;
 
 /** Cierra el paso sur entre la fortaleza y el puerto; el ferry sigue accesible desde la costa. */
 export const ISLAND_ROUTE_RAILS = [
@@ -392,6 +537,13 @@ export function isNorthArcadeCabinetBlocked(x: number, y: number): boolean {
 
 export const ISLAND_KEY_COORDS = {
   awakeningSpawn: { x: 470, y: 1830 },
+  origenBeachLanding: { x: 460, y: 2060 },
+  origenBridgeMechanism: { x: 568, y: 1912 },
+  origenGeneratorGate: { x: 1444, y: 1312 },
+  origenLaserConsole: { x: 1398, y: 1312 },
+  origenSecurityRuins: { x: 1524, y: 1388 },
+  origenLakeChest: { x: 720, y: 1458 },
+  origenFroggerCabinet: { x: 1148, y: 1128 },
   pongCabinet: { x: 2820, y: 1660 },
   pongBoardLaunch: { x: 2710, y: 1610 },
   pongBoardLanding: { x: 1760, y: 780 },
@@ -407,6 +559,25 @@ export const ISLAND_KEY_COORDS = {
 };
 
 export const ISLAND_NPCS: IslandNpcSpec[] = [
+  {
+    id: 'npc-viejo-amigo',
+    name: 'Viejo Amigo · Guardián de la Cala',
+    role: 'Viejo amigo del abuelo de Pixel',
+    x: 532,
+    y: 2088,
+    zoneId: 'costa-despertar',
+    palette: { primary: '#2d6a4f', secondary: '#d9b878', glow: '#8cd96c' },
+    pitch: 0.7,
+    linesInitial: [
+      '«Ese puente se quebró con el temblor. El engranaje que mueve el torno salió despedido y quedó enterrado en la arena de esta cala.»',
+      '«Tu abuelo me encomendó que te diera el Pulso Sonar. Emitilo con [F / Acción]: no gasta energía y te muestra lo que la arena esconde.»',
+      '«Encontrá el engranaje, instalalo en el mecanismo de la orilla y el puente bajará solo.»',
+    ],
+    linesAfterPong: [
+      '«La marea deja brillos en la arena cuando algo de metal queda enterrado. Emití el Pulso Sonar cerca de esos destellos.»',
+      '«El engranaje del puente es lo primero. Sin él no vas a cruzar el canal hacia el asentamiento.»',
+    ],
+  },
   {
     id: 'npc-bit01',
     name: 'Bit-01 · Cronista de la Aldea',
@@ -628,10 +799,10 @@ export const ISLAND_SWITCHES: IslandSwitchSpec[] = [
 ];
 
 export const ISLAND_PIER_SPEC = {
-  x: 400,
-  y: 2000,
+  x: 398,
+  y: 2088,
   w: 140,
-  h: 220,
+  h: 240,
 };
 
 export const LAVA_STRAIGHT_BRIDGE_SPEC = {
@@ -654,6 +825,20 @@ export const ISLAND_SAND_MOUNDS: IslandSandMoundSpec[] = [
   { id: 'mound-2', x: 340, y: 2080, rewardItemId: null, label: 'Montículo de Arena Simple' },
   { id: 'mound-3', x: 640, y: 2000, rewardItemId: 'item-cristal-resonante', label: 'Montículo de Arena Central' },
   { id: 'mound-4', x: 780, y: 2060, rewardItemId: null, label: 'Montículo de Arena Oriental' },
+  {
+    id: 'mound-engranaje-puente',
+    x: 300,
+    y: 2160,
+    rewardItemId: 'item-engranaje-puente',
+    label: 'Montículo del Engranaje',
+  },
+  {
+    id: 'mound-brujula-mareas',
+    x: 780,
+    y: 2160,
+    rewardItemId: 'item-brujula-mareas',
+    label: 'Montículo de la Brújula',
+  },
 ];
 
 export const ISLAND_DIAMONDS: IslandDiamondSpec[] = [
@@ -693,6 +878,13 @@ export const ISLAND_DIAMONDS: IslandDiamondSpec[] = [
     x: 2235,
     y: 235,
     zoneId: 'cumbre-arquitecto',
+  },
+  {
+    id: 'isl-dia-faro',
+    label: 'Diamante del Acantilado del Faro',
+    x: 4048,
+    y: 2056,
+    zoneId: 'faro-reinicio',
   },
 ];
 
@@ -756,6 +948,8 @@ export function isPointWalkableOnIsland(
     if (r.requiresCondition === 'south-shortcut' && !opts.southShortcut) continue;
     if (r.requiresCondition === 'garganta-bridge' && !opts.gargantaBridge) continue;
     if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) {
+      // El lago del bosque resta superficie caminable dentro del claro.
+      if (isInsideOrigenForestLake(px, py)) return null;
       return r;
     }
   }

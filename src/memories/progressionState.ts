@@ -230,6 +230,7 @@ export function createInitialProgressState(): PixelverseProgressState {
       'glitch-trail': createDefaultRecord('glitch-trail'),
       'night-driver': createDefaultRecord('night-driver'),
       galaxian: createDefaultRecord('galaxian'),
+      frogger: createDefaultRecord('frogger'),
     },
     diamondsSaved: 0,
     diamondsSpent: 0,
@@ -374,7 +375,6 @@ function deriveCoherentRpgState(
   const pongDone = Boolean(games['pong']?.memoryUnlocked);
   const breakoutDone = Boolean(games['breakout']?.memoryUnlocked);
   const asteroidsDone = Boolean(games['asteroids']?.memoryUnlocked);
-  const seawolfDone = Boolean(games['sea-wolf']?.memoryUnlocked);
   const tankDone = Boolean(games['tank']?.memoryUnlocked);
   const landerDone = Boolean(games['lunar-lander']?.memoryUnlocked);
   const invadersDone = Boolean(games['space-invaders']?.memoryUnlocked);
@@ -394,9 +394,8 @@ function deriveCoherentRpgState(
   if (asteroidsDone) {
     items.add('item-modulo-orbital');
   }
-  if (seawolfDone) {
-    items.add('item-sonar-profundidad');
-  }
+  // El Sonar ya no se obtiene en Sea Wolf: lo entrega el viejo amigo en la cala
+  // de Isla del Origen (fuente única, sin duplicar poderes).
   if (tankDone) {
     items.add('item-llave-bunker-militar');
   }
@@ -512,6 +511,21 @@ function deriveCoherentIslandState(
     abilities.add('phosphor-lantern');
   }
 
+  // Migración de partidas anteriores a la nueva llegada por la cala: si el
+  // jugador ya estaba en el asentamiento (norte del canal) o visitó otros
+  // sectores, el puente se considera abierto para no encerrarlo sin salida.
+  const narrativeEvents = new Set<string>(island.narrativeEvents);
+  const legacyNorthOfCanal =
+    island.lastIslandPos !== null && island.lastIslandPos.y < 1872;
+  const legacyProgress =
+    legacyNorthOfCanal ||
+    island.glitchTrailCompleted ||
+    island.visitedZones.some((z) => z !== 'costa-despertar') ||
+    island.talkedNpcIds.some((id) => id !== 'npc-viejo-amigo');
+  if (legacyProgress) {
+    narrativeEvents.add('origen-puente-abierto');
+  }
+
   const objectives = new Set<string>(island.completedObjectives);
   objectives.add('awakened-70s');
   if (pongDone) objectives.add('pong-restored');
@@ -536,6 +550,7 @@ function deriveCoherentIslandState(
     unlockedCabinets: Array.from(unlockedCabinets),
     abilitiesUnlocked: Array.from(abilities),
     completedObjectives: Array.from(objectives),
+    narrativeEvents: Array.from(narrativeEvents),
   };
 }
 
@@ -1106,6 +1121,30 @@ export function grantInventoryItems(
   itemIds: string[]
 ): PixelverseProgressState {
   const nextItems = Array.from(new Set([...prev.rpg.inventoryItems, ...itemIds]));
+  if (nextItems.length === prev.rpg.inventoryItems.length) return prev;
+  const nextRpg = deriveCoherentRpgState(
+    {
+      ...prev.rpg,
+      inventoryItems: nextItems,
+    },
+    prev.games
+  );
+  const next: PixelverseProgressState = {
+    ...prev,
+    rpg: nextRpg,
+    island70s: deriveCoherentIslandState(prev.island70s, prev.games, nextRpg),
+  };
+  saveProgressState(next);
+  return next;
+}
+
+/** Quita objetos del inventario cuando se consumen o se instalan en el mundo. */
+export function consumeInventoryItems(
+  prev: PixelverseProgressState,
+  itemIds: string[]
+): PixelverseProgressState {
+  const removing = new Set(itemIds);
+  const nextItems = prev.rpg.inventoryItems.filter((id) => !removing.has(id));
   if (nextItems.length === prev.rpg.inventoryItems.length) return prev;
   const nextRpg = deriveCoherentRpgState(
     {

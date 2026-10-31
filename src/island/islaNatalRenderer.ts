@@ -118,7 +118,6 @@ const SIGN_POS = { x: 872, y: 946 };
 const NET_POS = { x: 668, y: 958 };
 const SHELLS_POI_POS = { x: 946, y: 974 };
 const MAILBOX_POS = { x: 574, y: 792 };
-const CRATE_POS = { x: 596, y: 704 };
 const MIRADOR_POS = { x: 452, y: 306 };
 
 /** Carteles de zona: mismo formato pequeño que los del Origen. */
@@ -1151,10 +1150,10 @@ function paintGroundLayer(field: NatalCoastField): HTMLCanvasElement {
   const worldW = canvas.width;
   const worldH = canvas.height;
   const worldLight = ctx.createLinearGradient(0, 0, worldW, worldH);
-  worldLight.addColorStop(0, 'rgba(255, 226, 164, 0.075)');
-  worldLight.addColorStop(0.34, 'rgba(255, 236, 190, 0.02)');
+  worldLight.addColorStop(0, 'rgba(255, 222, 156, 0.13)');
+  worldLight.addColorStop(0.34, 'rgba(255, 236, 190, 0.045)');
   worldLight.addColorStop(0.62, 'rgba(210, 230, 200, 0)');
-  worldLight.addColorStop(1, 'rgba(18, 52, 64, 0.055)');
+  worldLight.addColorStop(1, 'rgba(18, 52, 64, 0.08)');
   ctx.fillStyle = worldLight;
   ctx.fillRect(0, 0, worldW, worldH);
 
@@ -1214,6 +1213,15 @@ function drawOcean(
   current.addColorStop(1, 'rgba(4, 22, 38, 0.12)');
   ctx.fillStyle = current;
   ctx.fillRect(camX, camY, vw, vh);
+
+  // Luz cálida del oeste: el agua cercana al sol pierde azul y gana ámbar.
+  // La capa de tierra se pinta después, así que sólo queda sobre el mar.
+  const westGlow = ctx.createLinearGradient(camX, 0, camX + vw * 0.6, 0);
+  westGlow.addColorStop(0, 'rgba(255, 176, 108, 0.055)');
+  westGlow.addColorStop(0.55, 'rgba(255, 162, 98, 0.018)');
+  westGlow.addColorStop(1, 'rgba(255, 150, 90, 0)');
+  ctx.fillStyle = westGlow;
+  ctx.fillRect(camX, camY, vw * 0.6, vh);
 
   const drawCrest = (
     cx: number,
@@ -1337,6 +1345,49 @@ function drawOcean(
     }
   }
 
+  // Reflejo del sol bajo: una lengua cálida y rota sobre el agua del oeste.
+  // Se dibuja en coordenadas de mundo, así que acompaña al jugador; la capa
+  // de tierra y bajío se pinta después y recorta el brillo contra la costa.
+  const reflX = 120;
+  const reflY = 420;
+  if (reflX + 620 > camX && reflY + 220 > camY && reflY - 220 < camY + vh) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const reflPulse = reducedMotion ? 0.82 : 0.74 + Math.sin(elapsed * 0.65) * 0.18;
+
+    // Banda ancha de agua iluminada bajo el reflejo.
+    const band = ctx.createLinearGradient(0, reflY - 100, 0, reflY + 100);
+    band.addColorStop(0, 'rgba(255, 190, 120, 0)');
+    band.addColorStop(0.5, `rgba(255, 196, 128, ${(0.07 * reflPulse).toFixed(3)})`);
+    band.addColorStop(1, 'rgba(255, 190, 120, 0)');
+    ctx.fillStyle = band;
+    ctx.fillRect(reflX - 40, reflY - 100, 660, 200);
+
+    // Trazos horizontales de distinta longitud: el reflejo se quiebra con la
+    // marea en vez de leerse como una columna plana.
+    for (let row = -4; row <= 4; row++) {
+      const ry = Math.round(
+        reflY + row * 12 + (reducedMotion ? 0 : Math.sin(row * 1.7 + elapsed * 0.4) * 3)
+      );
+      const lead = hash2(row * 31 + 7, 91);
+      const strokes = 2 + (Math.abs(row) < 2 ? 1 : 0);
+      for (let i = 0; i < strokes; i++) {
+        const h = hash2(row * 17 + i * 7, 53);
+        const len = Math.round((30 - Math.abs(row) * 3) * (0.55 + h * 0.9));
+        const drift = reducedMotion ? 0 : (elapsed * (5 + h * 6) + i * 67 + row * 23) % 230;
+        const rx = reflX - 26 + lead * 80 + i * 90 + drift;
+        const a = (0.13 + (1 - Math.abs(row) / 6) * 0.2) * reflPulse;
+        ctx.fillStyle = `rgba(255, 232, 180, ${a.toFixed(3)})`;
+        ctx.fillRect(Math.round(rx), ry, len, 1);
+        if (h > 0.58) {
+          ctx.fillStyle = `rgba(255, 248, 224, ${Math.min(1, a * 2.1).toFixed(3)})`;
+          ctx.fillRect(Math.round(rx + len * 0.36), ry - 1, 2, 1);
+        }
+      }
+    }
+    ctx.restore();
+  }
+
   // Remolinos y espuma suelta, sólo donde la corriente se cruza.
   for (let wy = row0 + 3; wy < camY + vh + rowH; wy += rowH * 3) {
     const row = Math.floor(wy / rowH);
@@ -1454,6 +1505,24 @@ function drawShoreWater(
       else ctx.fillRect(x, y, 1, 4);
     }
   }
+
+  // Sheen dorado del atardecer sobre el agua que roza la costa oeste: une el
+  // reflejo del sol con la rompiente y evita que la orilla quede fría.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < foam.length; i++) {
+    const f = foam[i];
+    if (f.x > 660) continue;
+    const dy = Math.abs(f.y - 420);
+    if (dy > 180) continue;
+    const flick = 0.55 + Math.sin(elapsed * 1.35 + f.phase) * 0.45;
+    const a = (1 - dy / 180) * 0.13 * flick;
+    if (a <= 0.004) continue;
+    ctx.fillStyle = `rgba(255, 214, 148, ${a.toFixed(3)})`;
+    if (f.horiz) ctx.fillRect(Math.round(f.x - 2), Math.round(f.y - 1), 7, 1);
+    else ctx.fillRect(Math.round(f.x - 1), Math.round(f.y - 3), 1, 7);
+  }
+  ctx.restore();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1906,6 +1975,15 @@ function drawPalm(
     ctx.fillStyle = 'rgba(255, 214, 150, 0.4)';
     ctx.fillRect(crownX + ox, crownY + oy, 1, 1);
   }
+
+  // Destellos cálidos del sol bajo en las frondas del oeste.
+  if (!reducedMotion) {
+    const glint = 0.24 + (Math.sin(elapsed * 1.35 + seed * 5.3) * 0.5 + 0.5) * 0.34;
+    ctx.fillStyle = `rgba(255, 238, 176, ${glint.toFixed(3)})`;
+    ctx.fillRect(crownX - 14, crownY + 1, 1, 1);
+    ctx.fillRect(crownX - 9, crownY - 3, 1, 1);
+    ctx.fillRect(crownX - 18, crownY + 5, 1, 1);
+  }
 }
 
 function drawBoulder(
@@ -2286,6 +2364,39 @@ function drawHut(ctx: CanvasRenderingContext2D, elapsed: number, reducedMotion: 
       ctx.fillRect(px, roofTop + i + 1, 2 + Math.floor(th * 4), 1);
     }
   }
+  // Pátina del material: paja asoleada junto a la cumbrera y verdín húmedo
+  // en el alero oriental, donde la luz del oeste ya no llega.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const ridgeGlow = ctx.createLinearGradient(0, roofTop, 0, roofTop + 30);
+  ridgeGlow.addColorStop(0, 'rgba(255, 228, 156, 0.15)');
+  ridgeGlow.addColorStop(0.55, 'rgba(255, 210, 132, 0.05)');
+  ridgeGlow.addColorStop(1, 'rgba(255, 198, 120, 0)');
+  ctx.fillStyle = ridgeGlow;
+  ctx.fillRect(x + 8, roofTop, w - 16, 30);
+  ctx.restore();
+  for (let i = 0; i < 9; i++) {
+    const th = hash2(i * 19 + x, roofBottom + 7);
+    if (th < 0.48) continue;
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(96, 128, 70, 0.38)' : 'rgba(74, 106, 58, 0.32)';
+    ctx.fillRect(
+      x + w * 0.58 + i * 4.4,
+      roofBottom - 2 - Math.floor(th * 3),
+      3 + Math.floor(th * 3),
+      2
+    );
+  }
+  // Hebras sueltas que el viento arrastra desde el alero.
+  if (!reducedMotion) {
+    for (let i = 0; i < 3; i++) {
+      const t = (elapsed * 0.16 + i / 3) % 1;
+      const sx = x + w * 0.3 + t * 52 + Math.sin(t * 7 + i * 2.1) * 9;
+      const sy = roofBottom - 6 - t * 30 - i * 2;
+      ctx.fillStyle = `rgba(244, 218, 156, ${(0.45 * (1 - t)).toFixed(3)})`;
+      ctx.fillRect(Math.round(sx), Math.round(sy), 2, 1);
+    }
+  }
+
   // Alero y sombra bajo el techo.
   ctx.fillStyle = '#8f6f30';
   ctx.fillRect(x - 10, roofBottom - 2, w + 20, 4);
@@ -2817,15 +2928,6 @@ function drawMailbox(ctx: CanvasRenderingContext2D): void {
   ctx.fillRect(x - 2, y - 27, 8, 5);
   ctx.fillStyle = '#38bdf8';
   ctx.fillRect(x - 1, y - 26, 6, 1);
-}
-
-function drawCrate(
-  ctx: CanvasRenderingContext2D,
-  elapsed: number,
-  reducedMotion: boolean
-): void {
-  // Reutiliza el cofre de Isla Orígenes como caja de herramientas del viejo viajero.
-  drawRpgTreasureChest(ctx, CRATE_POS.x, CRATE_POS.y, false, '#d97706', elapsed, reducedMotion);
 }
 
 /**
@@ -3762,6 +3864,8 @@ export interface IslaNatalCabinRenderParams {
   prompt: IslaNatalPromptSpec | null;
   /** La mochila sigue colgada del clavo junto a la ventana. */
   backpackOnHook: boolean;
+  /** El cofre del abuelo ya fue abierto con la combinación. */
+  chestOpened: boolean;
   /** La radio de la mesa está encendida y suena durante la intro. */
   radioOn?: boolean;
   /** Tormenta del aviso: el cielo se parte mientras Pixel está adentro. */
@@ -4725,6 +4829,62 @@ function drawCabinBackpack(ctx: CanvasRenderingContext2D, elapsed: number, reduc
   ctx.restore();
 }
 
+/** El cofre del abuelo, bajo el retrato familiar, con su cerradura de cuatro discos. */
+function drawCabinChest(
+  ctx: CanvasRenderingContext2D,
+  opened: boolean,
+  elapsed: number,
+  reducedMotion: boolean
+): void {
+  const { x, y } = ISLA_NATAL_CABIN.chest;
+  // Pozo de luz cálida para separar el cofre del parquet.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const glow = ctx.createRadialGradient(x, y + 4, 2, x, y + 4, 42);
+  glow.addColorStop(0, opened ? 'rgba(255, 214, 138, 0.16)' : 'rgba(255, 196, 110, 0.2)');
+  glow.addColorStop(1, 'rgba(255, 170, 80, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x - 44, y - 38, 88, 84);
+  ctx.restore();
+
+  if (opened) {
+    // Tapa levantada contra la pared: sin ella el cofre abierto se confundía
+    // con un banco. Se dibuja detrás del cuerpo, con sus herrajes dorados.
+    ctx.fillStyle = '#2a1a0e';
+    ctx.fillRect(x - 15, y - 29, 30, 10);
+    ctx.fillStyle = '#8b4e20';
+    ctx.fillRect(x - 14, y - 28, 28, 8);
+    ctx.fillStyle = '#b4672e';
+    ctx.fillRect(x - 14, y - 28, 28, 2);
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(x - 10, y - 28, 2, 8);
+    ctx.fillRect(x + 8, y - 28, 2, 8);
+    ctx.fillStyle = '#070b14';
+    ctx.fillRect(x - 9, y - 20, 3, 2);
+    ctx.fillRect(x + 6, y - 20, 3, 2);
+  }
+
+  drawRpgTreasureChest(ctx, x, y, opened, '#facc15', elapsed, reducedMotion);
+
+  if (opened) {
+    // Carta y fotografía asomando del interior de terciopelo.
+    ctx.fillStyle = '#f4e6c4';
+    ctx.fillRect(x - 9, y - 13, 12, 6);
+    ctx.fillStyle = '#d8c49a';
+    ctx.fillRect(x - 9, y - 11, 12, 1);
+    ctx.fillStyle = '#2f4a6a';
+    ctx.fillRect(x + 3, y - 15, 9, 8);
+    ctx.fillStyle = '#bcd2e6';
+    ctx.fillRect(x + 4, y - 14, 7, 2);
+    ctx.fillStyle = '#e8d7b4';
+    ctx.fillRect(x + 5, y - 11, 4, 3);
+  } else if (!reducedMotion && Math.floor(elapsed * 2.2) % 4 === 0) {
+    // La cerradura devuelve un destello: el cofre sabe que ya puedes abrirlo.
+    ctx.fillStyle = '#fff6cf';
+    ctx.fillRect(x + 1, y - 10, 2, 2);
+  }
+}
+
 /** Radio encendida sobre la mesa: dial cálido y ondas de sonido. */
 function drawCabinRadioLive(
   ctx: CanvasRenderingContext2D,
@@ -4768,6 +4928,7 @@ export function renderIslaNatalCabin(params: IslaNatalCabinRenderParams): void {
   ctx.translate(-Math.round(camera.x), -Math.round(camera.y));
   drawCabinShell(ctx, elapsed, reducedMotion);
   drawCabinFurniture(ctx, elapsed, reducedMotion);
+  drawCabinChest(ctx, params.chestOpened, elapsed, reducedMotion);
   if (params.radioOn) drawCabinRadioLive(ctx, elapsed, reducedMotion);
   if (params.backpackOnHook) drawCabinBackpack(ctx, elapsed, reducedMotion);
   drawPlayer(ctx, params, elapsed);
@@ -4977,7 +5138,6 @@ export function renderIslaNatalFrame(params: IslaNatalRenderParams): void {
   ySorted.push({ sortY: NET_POS.y + 8, draw: () => drawNet(ctx, elapsed) });
   ySorted.push({ sortY: SHELLS_POI_POS.y + 8, draw: () => drawShellCluster(ctx, elapsed) });
   ySorted.push({ sortY: MAILBOX_POS.y + 1, draw: () => drawMailbox(ctx) });
-  ySorted.push({ sortY: CRATE_POS.y + 1, draw: () => drawCrate(ctx, elapsed, reducedMotion) });
   if (isWorldBoxVisible(MIRADOR_POS.x - 64, MIRADOR_POS.y - 40, 128, 52, camX, camY, vw, vh)) {
     ySorted.push({
       sortY: MIRADOR_POS.y + 2,
@@ -5148,18 +5308,18 @@ export function renderIslaNatalFrame(params: IslaNatalRenderParams): void {
   ctx.restore();
 
   // Viñeta suave en espacio de pantalla
-  const vig = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.32, vw / 2, vh / 2, Math.max(vw, vh) * 0.78);
+  const vig = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.36, vw / 2, vh / 2, Math.max(vw, vh) * 0.8);
   vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  vig.addColorStop(1, 'rgba(4, 10, 20, 0.55)');
+  vig.addColorStop(1, 'rgba(4, 10, 20, 0.45)');
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, vw, vh);
 
   // Neblina cálida del atardecer y frescor del mar en el borde inferior
   const haze = ctx.createLinearGradient(0, 0, 0, vh);
-  haze.addColorStop(0, 'rgba(255, 186, 120, 0.1)');
-  haze.addColorStop(0.42, 'rgba(255, 168, 110, 0.035)');
+  haze.addColorStop(0, 'rgba(255, 190, 126, 0.13)');
+  haze.addColorStop(0.42, 'rgba(255, 172, 114, 0.05)');
   haze.addColorStop(0.78, 'rgba(90, 120, 170, 0.04)');
-  haze.addColorStop(1, 'rgba(52, 46, 96, 0.14)');
+  haze.addColorStop(1, 'rgba(52, 46, 96, 0.13)');
   ctx.fillStyle = haze;
   ctx.fillRect(0, 0, vw, vh);
 
@@ -5171,6 +5331,22 @@ export function renderIslaNatalFrame(params: IslaNatalRenderParams): void {
   ray.addColorStop(1, 'rgba(255, 160, 100, 0)');
   ctx.fillStyle = ray;
   ctx.fillRect(0, 0, vw, vh);
+  ctx.restore();
+
+  // Bloom localizado del sol bajo. Puramente atmosférico: no toca objetos,
+  // colisiones ni lectura, y sólo se pinta si el sol entra en cuadro.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const sunSX = 120 - camX;
+  const sunSY = 420 - camY;
+  if (sunSX > -360 && sunSX < vw + 360 && sunSY > -360 && sunSY < vh + 360) {
+    const bloom = ctx.createRadialGradient(sunSX, sunSY, 4, sunSX, sunSY, 340);
+    bloom.addColorStop(0, 'rgba(255, 232, 176, 0.14)');
+    bloom.addColorStop(0.38, 'rgba(255, 198, 126, 0.06)');
+    bloom.addColorStop(1, 'rgba(255, 168, 100, 0)');
+    ctx.fillStyle = bloom;
+    ctx.fillRect(sunSX - 340, sunSY - 340, 680, 680);
+  }
   ctx.restore();
 
   // Tormenta de la llegada: el cielo se oscurece y se parte en destellos.
